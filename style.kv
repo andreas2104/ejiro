@@ -1,0 +1,201 @@
+<root>
+ScreenManager:
+    DashboardScreen:
+    ClientsScreen:
+    InventoryScreen:
+    LoanScreen:
+    PaymentScreen:
+
+<ClientListItem>:
+    size_hint_y: None
+    height: "55dp"
+    canvas.before:
+        Color:
+            rgba: 0.9, 0.9, 0.9, 1
+        Rectangle:
+            pos: self.pos
+            size: self.size
+    BoxLayout:
+        orientation: "horizontal"
+        spacing: "8dp"
+        padding: "8dp", "5dp"
+        MDLabel:
+            text: root.client_name
+            size_hint_x: 0.3
+            halign: "center"
+            shorten: True
+            shorten_from: "right"
+        MDLabel:
+            text: root.client_telephone
+            size_hint_x: 0.3
+            halign: "center"
+        MDLabel:
+            text: root.client_adresse
+            size_hint_x: 0.4
+            halign: "center"
+            shorten: True
+            shorten_from: "right"
+
+<DashboardScreen>:
+    name: "dashboard"
+    BoxLayout:
+        orientation: "vertical"
+        padding: "16dp"
+        MDLabel:
+            id: daily_label
+            text: "Journalier: 0.00 CFA"
+            halign: "center"
+            font_style: "H4"
+        MDLabel:
+            id: weekly_label
+            text: "Hebdomadaire: 0.00 CFA"
+            halign: "center"
+            font_style: "H5"
+        GridLayout:
+            cols: 2
+            spacing: "16dp"
+            MDFlatButton:
+                text: "Clients"
+                on_press: root.manager.current = "clients"
+            MDFlatButton:
+                text: "Inventaire"
+                on_press: root.manager.current = "inventory"
+            MDFlatButton:
+                text: "Prêt"
+                on_press: root.manager.current = "loan"
+            MDFlatButton:
+                text: "Paiement"
+                on_press: root.manager.current = "payment"
+
+<ClientsScreen>:
+    name: "clients"
+    BoxLayout:
+        orientation: "vertical"
+        padding: 0
+        spacing: 0
+        MDLabel:
+            text: "Liste des Clients"
+            halign: "center"
+            font_style: "H4"
+            size_hint_y: None
+            height: "50dp"
+        GridLayout:
+            cols: 3
+            size_hint_y: None
+            height: "45dp"
+            padding: "8dp"
+            MDLabel:
+                text: "Nom"
+                bold: True
+                halign: "center"
+                theme_text_color: "Primary"
+            MDLabel:
+                text: "Telephone"
+                bold: True
+                halign: "center"
+                theme_text_color: "Primary"
+            MDLabel:
+                text: "Adresse"
+                bold: True
+                halign: "center"
+                theme_text_color: "Primary"
+        RecycleView:
+            id: clients_list
+            viewclass: "ClientListItem"
+            size_hint_y: 1
+            RecycleBoxLayout:
+                orientation: "vertical"
+                spacing: 0
+                padding: 0
+        GridLayout:
+            cols: 3
+            spacing: "12dp"
+            size_hint_y: None
+            height: "50dp"
+            padding: "8dp"
+            MDRaisedButton:
+                text: "Nouveau"
+                on_press: root.show_client_form("add")
+            MDRaisedButton:
+                text: "Modifier"
+                on_press: root.show_client_form("edit")
+            MDRaisedButton:
+                text: "Supprimer"
+                bg_color: 0.9, 0.3, 0.3, 1
+                on_press: root.delete_client()
+        MDFlatButton:
+            text: "Retour au Tableau de Bord"
+            on_press: root.manager.current = "dashboard"
+
+<InventoryScreen>:
+    name: "inventory"
+    BoxLayout:
+        orientation: "vertical"
+        padding: "16dp"
+        MDLabel:
+            text: "Inventaire"
+            halign: "center"
+            font_style: "H5"
+        TextInput:
+            id: numero_input
+            hint_text: "Numéro de lampe"
+            multiline: False
+        MDFlatButton:
+            text: "Ajouter Lampe"
+            on_press: root.add_lampe(numero_input.text)
+        RecycleView:
+            id: inventory_list
+            viewclass: "Label"
+            RecycleBoxLayout:
+                orientation: "vertical"
+                spacing: "8dp"
+        MDFlatButton:
+            text: "Retour"
+            on_press: root.manager.current = "dashboard"
+
+<LoanScreen>:
+    name: "loan"
+    BoxLayout:
+        orientation: "vertical"
+        padding: "16dp"
+        MDLabel:
+            text: "Créer un prêt"
+            halign: "center"
+            font_style: "H5"
+        Spinner:
+            id: client_spinner
+            text: "Sélectionner client"
+        Spinner:
+            id: lampe_spinner
+            text: "Sélectionner lampe"
+        MDFlatButton:
+            text: "Créer Prêt"
+            on_press: root.assign_lampe(client_spinner.text, lampe_spinner.text)
+        MDFlatButton:
+            text: "Retour"
+            on_press: root.manager.current = "dashboard"
+
+<PaymentScreen>:
+    name: "payment"
+    BoxLayout:
+        orientation: "vertical"
+        padding: "16dp"
+        MDLabel:
+            text: "Enregistrer paiement"
+            halign: "center"
+            font_style: "H5"
+        Spinner:
+            id: loan_spinner
+            text: "Sélectionner prêt"
+        TextInput:
+            id: montant_input
+            hint_text: "Montant"
+            multiline: False
+            input_filter: "float"
+        MDFlatButton:
+            text: "Enregistrer"
+            on_press: root.record_payment(loan_spinner.text, float(montant_input.text or 0))
+        MDFlatButton:
+            text: "Retour"
+            on_press: root.manager.current = "dashboard"
+</root>
