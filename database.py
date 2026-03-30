@@ -17,6 +17,7 @@ class DatabaseManager:
     def _init_tables(self) -> None:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
+            cursor.execute("PRAGMA foreign_keys = ON")
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS clients (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -26,10 +27,11 @@ class DatabaseManager:
                 )
             """)
             cursor.execute("""
-                CREATE TABLE IF NOT EXISTS lampes (
+                CREATE TABLE IF NOT EXISTS lamps (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     numero TEXT UNIQUE NOT NULL,
-                    etat TEXT CHECK(etat IN ('disponible', 'louée', 'maintenance')) DEFAULT 'disponible'
+                    etat TEXT CHECK(etat IN ('disponible', 'louée', 'maintenance'))
+                    DEFAULT 'disponible'
                 )
             """)
             cursor.execute("""
@@ -159,6 +161,49 @@ class DatabaseManager:
                 return {"id": row[0], "numero": row[1], "etat": row[2]}
             return None
 
+    def get_lamp_by_id(self, lamp_id: int) -> Optional[Dict[str, Any]]:
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT id, numero, etat FROM lampes WHERE id = ?",
+                (lamp_id,),
+            )
+            row = cursor.fetchone()
+            if row:
+                return {"id": row[0], "numero": row[1], "etat": row[2]}
+            return None
+
+    def update_lamp(self, lamp_id: int, numero: str, etat: str) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "UPDATE lampes SET numero = ?, etat = ? WHERE id = ?",
+                (numero, etat, lamp_id),
+            )
+            conn.commit()
+            logger.info(f"Lamp {lamp_id} updated")
+
+    def add_lamp_with_etat(self, numero: str, etat: str) -> int:
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            try:
+                cursor.execute(
+                    "INSERT INTO lampes (numero, etat) VALUES (?, ?)", (numero, etat)
+                )
+                conn.commit()
+                logger.info(f"Lamp added: {numero}")
+                return cursor.lastrowid
+            except sqlite3.IntegrityError as e:
+                logger.error(f"Error adding lamp: {e}")
+                raise
+
+    def delete_lamp(self, lamp_id: int) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM lampes WHERE id = ?", (lamp_id,))
+            conn.commit()
+            logger.info(f"Lamp {lamp_id} deleted")
+
     def assign_lampe_to_client(self, client_id: int, lampe_id: int) -> int:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
@@ -191,6 +236,41 @@ class DatabaseManager:
             conn.commit()
             logger.info(f"Loan {pret_id} closed")
 
+    def delete_loan(self, pret_id: int) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT lampe_id FROM prets WHERE id = ?", (pret_id,))
+            row = cursor.fetchone()
+            if row:
+                cursor.execute(
+                    "UPDATE lampes SET etat = 'disponible' WHERE id = ?", (row[0],)
+                )
+            cursor.execute("DELETE FROM prets WHERE id = ?", (pret_id,))
+            conn.commit()
+            logger.info(f"Loan {pret_id} deleted")
+
+    def get_all_loans(self) -> List[Dict[str, Any]]:
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT p.id, c.nom, l.numero, p.date_debut, p.statut
+                FROM prets p
+                JOIN clients c ON p.client_id = c.id
+                JOIN lampeS l ON p.lampe_id = l.id
+                ORDER BY p.id DESC
+            """)
+            rows = cursor.fetchall()
+            return [
+                {
+                    "id": r[0],
+                    "client_nom": r[1],
+                    "lampe_numero": r[2],
+                    "date_debut": r[3],
+                    "statut": r[4],
+                }
+                for r in rows
+            ]
+
     def get_active_loans(self) -> List[Dict[str, Any]]:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
@@ -221,7 +301,8 @@ class DatabaseManager:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "INSERT INTO transactions (pret_id, date_paiement, montant, type) VALUES (?, ?, ?, ?)",
+                "INSERT INTO transactions (pret_id, date_paiement, montant, type) "
+                "VALUES (?, ?, ?, ?)",
                 (pret_id, datetime.now().isoformat(), montant, type),
             )
             conn.commit()
@@ -245,7 +326,8 @@ class DatabaseManager:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT SUM(montant) FROM transactions WHERE date_paiement >= ? AND date_paiement <= ?",
+                "SELECT SUM(montant) FROM transactions "
+                "WHERE date_paiement >= ? AND date_paiement <= ?",
                 (week_ago, f"{today}T23:59:59"),
             )
             result = cursor.fetchone()[0]

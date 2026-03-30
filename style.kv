@@ -1,38 +1,83 @@
-<root>
-ScreenManager:
-    DashboardScreen:
-    ClientsScreen:
-    InventoryScreen:
-    LoanScreen:
-    PaymentScreen:
+<RootWidget>:
+    orientation: "vertical"
+    HeaderBar:
+        size_hint_y: None
+        height: "50dp"
+        MDLabel:
+            text: "e-Jiro"
+            halign: "left"
+            padding: "16dp", 0
+            font_style: "H5"
+            text_color: 1, 1, 1, 1
+        BoxLayout:
+            size_hint_x: None
+            width: "140dp"
+            spacing: "8dp"
+            padding: "8dp", "8dp"
+            MDFlatButton:
+                text: "Actualiser"
+                on_press: root.reload_app()
+            MDFlatButton:
+                text: "Quitter"
+                on_press: root.exit_app()
+    ScreenManager:
+        id: screen_manager
+        DashboardScreen:
+        ClientsScreen:
+        InventoryScreen:
+        LoanScreen:
+        PaymentScreen:
+
+<HeaderBar>:
+    orientation: "horizontal"
+    padding: "8dp"
+    spacing: "8dp"
+    canvas.before:
+        Color:
+            rgba: 0.2, 0.2, 0.2, 1
+        Rectangle:
+            pos: self.pos
+            size: self.size
+
+<MDButton>:
+    size_hint_y: None
+    height: "48dp"
+    font_size: "16sp"
 
 <ClientListItem>:
     size_hint_y: None
-    height: "55dp"
+    height: "60dp"
+    padding: 0, 0
     canvas.before:
         Color:
             rgba: 0.9, 0.9, 0.9, 1
         Rectangle:
             pos: self.pos
             size: self.size
+        Color:
+            rgba: 0.7, 0.7, 0.7, 1
+        Line:
+            points: self.x, self.y, self.x + self.width, self.y
     BoxLayout:
         orientation: "horizontal"
-        spacing: "8dp"
-        padding: "8dp", "5dp"
+        size_hint_x: 1
         MDLabel:
             text: root.client_name
             size_hint_x: 0.3
             halign: "center"
             shorten: True
             shorten_from: "right"
+            font_size: "16sp"
         MDLabel:
             text: root.client_telephone
             size_hint_x: 0.3
             halign: "center"
+            font_size: "16sp"
         MDLabel:
             text: root.client_adresse
             size_hint_x: 0.4
             halign: "center"
+            font_size: "16sp"
             shorten: True
             shorten_from: "right"
 
@@ -40,32 +85,44 @@ ScreenManager:
     name: "dashboard"
     BoxLayout:
         orientation: "vertical"
-        padding: "16dp"
+        padding: "16dp", "8dp"
+        spacing: "8dp"
         MDLabel:
             id: daily_label
             text: "Journalier: 0.00 CFA"
             halign: "center"
             font_style: "H4"
+            size_hint_y: None
+            height: "60dp"
         MDLabel:
             id: weekly_label
             text: "Hebdomadaire: 0.00 CFA"
             halign: "center"
             font_style: "H5"
+            size_hint_y: None
+            height: "40dp"
         GridLayout:
             cols: 2
-            spacing: "16dp"
+            spacing: "12dp"
+            size_hint_y: None
+            height: "180dp"
             MDFlatButton:
                 text: "Clients"
-                on_press: root.manager.current = "clients"
+                font_size: "18sp"
+                on_press: app.root.ids.screen_manager.current = "clients"
             MDFlatButton:
-                text: "Inventaire"
-                on_press: root.manager.current = "inventory"
+                text: "Lamp"
+                font_size: "18sp"
+                on_press: app.root.ids.screen_manager.current = "inventory"
             MDFlatButton:
                 text: "Prêt"
-                on_press: root.manager.current = "loan"
+                font_size: "18sp"
+                on_press: app.root.ids.screen_manager.current = "loan"
             MDFlatButton:
                 text: "Paiement"
-                on_press: root.manager.current = "payment"
+                font_size: "18sp"
+                on_press: app.root.ids.screen_manager.current = "payment"
+        Widget:
 
 <ClientsScreen>:
     name: "clients"
@@ -83,119 +140,415 @@ ScreenManager:
             cols: 3
             size_hint_y: None
             height: "45dp"
-            padding: "8dp"
+            padding: 0, 0
+            canvas.before:
+                Color:
+                    rgba: 0.85, 0.85, 0.85, 1
+                Rectangle:
+                    pos: self.pos
+                    size: self.size
             MDLabel:
                 text: "Nom"
                 bold: True
                 halign: "center"
-                theme_text_color: "Primary"
+                size_hint_x: 0.3
             MDLabel:
                 text: "Telephone"
                 bold: True
                 halign: "center"
-                theme_text_color: "Primary"
+                size_hint_x: 0.3
             MDLabel:
                 text: "Adresse"
                 bold: True
                 halign: "center"
-                theme_text_color: "Primary"
-        RecycleView:
-            id: clients_list
-            viewclass: "ClientListItem"
+                size_hint_x: 0.4
+        ScrollView:
             size_hint_y: 1
-            RecycleBoxLayout:
-                orientation: "vertical"
+            GridLayout:
+                id: clients_list
+                cols: 1
+                size_hint_y: None
+                height: self.minimum_height
                 spacing: 0
                 padding: 0
         GridLayout:
             cols: 3
-            spacing: "12dp"
+            spacing: "8dp"
             size_hint_y: None
-            height: "50dp"
+            height: "60dp"
             padding: "8dp"
             MDRaisedButton:
                 text: "Nouveau"
+                font_size: "16sp"
                 on_press: root.show_client_form("add")
             MDRaisedButton:
                 text: "Modifier"
+                font_size: "16sp"
                 on_press: root.show_client_form("edit")
             MDRaisedButton:
                 text: "Supprimer"
+                font_size: "16sp"
                 bg_color: 0.9, 0.3, 0.3, 1
                 on_press: root.delete_client()
         MDFlatButton:
             text: "Retour au Tableau de Bord"
-            on_press: root.manager.current = "dashboard"
+            on_press: app.root.ids.screen_manager.current = "dashboard"
 
 <InventoryScreen>:
     name: "inventory"
     BoxLayout:
         orientation: "vertical"
-        padding: "16dp"
+        padding: 0
+        spacing: 0
         MDLabel:
-            text: "Inventaire"
+            text: "Lamp"
             halign: "center"
-            font_style: "H5"
-        TextInput:
-            id: numero_input
-            hint_text: "Numéro de lampe"
-            multiline: False
+            font_style: "H4"
+            size_hint_y: None
+            height: "50dp"
+        GridLayout:
+            cols: 2
+            size_hint_y: None
+            height: "45dp"
+            padding: 0, 0
+            canvas.before:
+                Color:
+                    rgba: 0.85, 0.85, 0.85, 1
+                Rectangle:
+                    pos: self.pos
+                    size: self.size
+            MDLabel:
+                text: "Numero"
+                bold: True
+                halign: "center"
+                size_hint_x: 0.5
+            MDLabel:
+                text: "Etat"
+                bold: True
+                halign: "center"
+                size_hint_x: 0.5
+        ScrollView:
+            size_hint_y: 1
+            GridLayout:
+                id: inventory_list
+                cols: 1
+                size_hint_y: None
+                height: self.minimum_height
+                spacing: 0
+                padding: 0
+        GridLayout:
+            cols: 3
+            spacing: "8dp"
+            size_hint_y: None
+            height: "60dp"
+            padding: "8dp"
+            MDRaisedButton:
+                text: "Nouveau"
+                font_size: "16sp"
+                on_press: root.show_lamp_form("add")
+            MDRaisedButton:
+                text: "Modifier"
+                font_size: "16sp"
+                on_press: root.show_lamp_form("edit")
+            MDRaisedButton:
+                text: "Supprimer"
+                font_size: "16sp"
+                bg_color: 0.9, 0.3, 0.3, 1
+                on_press: root.delete_lamp()
         MDFlatButton:
-            text: "Ajouter Lampe"
-            on_press: root.add_lampe(numero_input.text)
-        RecycleView:
-            id: inventory_list
-            viewclass: "Label"
-            RecycleBoxLayout:
-                orientation: "vertical"
-                spacing: "8dp"
-        MDFlatButton:
-            text: "Retour"
-            on_press: root.manager.current = "dashboard"
+            text: "Retour au Tableau de Bord"
+            font_size: "16sp"
+            on_press: app.root.ids.screen_manager.current = "dashboard"
+
+<LampListItem>:
+    size_hint_y: None
+    height: "60dp"
+    padding: 0, 0
+    canvas.before:
+        Color:
+            rgba: 0.9, 0.9, 0.9, 1
+        Rectangle:
+            pos: self.pos
+            size: self.size
+        Color:
+            rgba: 0.7, 0.7, 0.7, 1
+        Line:
+            points: self.x, self.y, self.x + self.width, self.y
+    BoxLayout:
+        orientation: "horizontal"
+        size_hint_x: 1
+        MDLabel:
+            text: root.lamp_numero
+            size_hint_x: 0.5
+            halign: "center"
+            font_size: "16sp"
+        MDLabel:
+            text: root.lamp_etat
+            size_hint_x: 0.5
+            halign: "center"
+            font_size: "16sp"
+
+<LoanListItem>:
+    size_hint_y: None
+    height: "60dp"
+    padding: 0, 0
+    canvas.before:
+        Color:
+            rgba: 0.9, 0.9, 0.9, 1
+        Rectangle:
+            pos: self.pos
+            size: self.size
+        Color:
+            rgba: 0.7, 0.7, 0.7, 1
+        Line:
+            points: self.x, self.y, self.x + self.width, self.y
+    BoxLayout:
+        orientation: "horizontal"
+        size_hint_x: 1
+        MDLabel:
+            text: root.client_nom
+            size_hint_x: 0.3
+            halign: "center"
+            font_size: "16sp"
+            shorten: True
+            shorten_from: "right"
+        MDLabel:
+            text: root.lampe_numero
+            size_hint_x: 0.3
+            halign: "center"
+            font_size: "16sp"
+        MDLabel:
+            text: root.date_debut
+            size_hint_x: 0.2
+            halign: "center"
+            font_size: "14sp"
+        MDLabel:
+            text: root.statut
+            size_hint_x: 0.2
+            halign: "center"
+            font_size: "14sp"
+
+<TransactionListItem>:
+    size_hint_y: None
+    height: "60dp"
+    padding: 0, 0
+    canvas.before:
+        Color:
+            rgba: 0.9, 0.9, 0.9, 1
+        Rectangle:
+            pos: self.pos
+            size: self.size
+        Color:
+            rgba: 0.7, 0.7, 0.7, 1
+        Line:
+            points: self.x, self.y, self.x + self.width, self.y
+    BoxLayout:
+        orientation: "horizontal"
+        size_hint_x: 1
+        MDLabel:
+            text: root.client_nom
+            size_hint_x: 0.3
+            halign: "center"
+            font_size: "16sp"
+            shorten: True
+            shorten_from: "right"
+        MDLabel:
+            text: root.lampe_numero
+            size_hint_x: 0.3
+            halign: "center"
+            font_size: "16sp"
+        MDLabel:
+            text: root.date_paiement
+            size_hint_x: 0.2
+            halign: "center"
+            font_size: "14sp"
+        MDLabel:
+            text: root.montant
+            size_hint_x: 0.2
+            halign: "center"
+            font_size: "14sp"
 
 <LoanScreen>:
     name: "loan"
     BoxLayout:
         orientation: "vertical"
-        padding: "16dp"
+        padding: 0
+        spacing: 0
         MDLabel:
-            text: "Créer un prêt"
+            text: "Prêts"
             halign: "center"
-            font_style: "H5"
-        Spinner:
-            id: client_spinner
-            text: "Sélectionner client"
-        Spinner:
-            id: lampe_spinner
-            text: "Sélectionner lampe"
-        MDFlatButton:
-            text: "Créer Prêt"
-            on_press: root.assign_lampe(client_spinner.text, lampe_spinner.text)
-        MDFlatButton:
-            text: "Retour"
-            on_press: root.manager.current = "dashboard"
+            font_style: "H4"
+            size_hint_y: None
+            height: "50dp"
+        GridLayout:
+            cols: 4
+            size_hint_y: None
+            height: "45dp"
+            padding: 0, 0
+            canvas.before:
+                Color:
+                    rgba: 0.85, 0.85, 0.85, 1
+                Rectangle:
+                    pos: self.pos
+                    size: self.size
+            MDLabel:
+                text: "Client"
+                bold: True
+                halign: "center"
+                size_hint_x: 0.3
+            MDLabel:
+                text: "Lampe"
+                bold: True
+                halign: "center"
+                size_hint_x: 0.3
+            MDLabel:
+                text: "Date"
+                bold: True
+                halign: "center"
+                size_hint_x: 0.2
+            MDLabel:
+                text: "Statut"
+                bold: True
+                halign: "center"
+                size_hint_x: 0.2
+        ScrollView:
+            size_hint_y: 1
+            GridLayout:
+                id: loans_list
+                cols: 1
+                size_hint_y: None
+                height: self.minimum_height
+                spacing: 0
+                padding: 0
+        GridLayout:
+            cols: 3
+            size_hint_y: None
+            height: "45dp"
+            padding: "8dp"
+            spacing: "8dp"
+            Spinner:
+                id: client_spinner
+                text: "Client"
+                size_hint_x: 0.3
+            Spinner:
+                id: lampe_spinner
+                text: "Lampe"
+                size_hint_x: 0.3
+            MDRaisedButton:
+                text: "Créer"
+                size_hint_x: 0.4
+                on_press: root.assign_lampe(client_spinner.text, lampe_spinner.text)
+        GridLayout:
+            cols: 3
+            spacing: "8dp"
+            size_hint_y: None
+            height: "60dp"
+            padding: "8dp"
+            MDRaisedButton:
+                text: "Clore"
+                font_size: "16sp"
+                on_press: root.close_loan()
+            MDRaisedButton:
+                text: "Supprimer"
+                font_size: "16sp"
+                bg_color: 0.9, 0.3, 0.3, 1
+                on_press: root.delete_loan()
+            MDFlatButton:
+                text: "Retour"
+                font_size: "16sp"
+                on_press: app.root.ids.screen_manager.current = "dashboard"
 
 <PaymentScreen>:
     name: "payment"
     BoxLayout:
         orientation: "vertical"
-        padding: "16dp"
+        padding: 0
+        spacing: 0
         MDLabel:
-            text: "Enregistrer paiement"
+            text: "Paiements"
             halign: "center"
-            font_style: "H5"
-        Spinner:
-            id: loan_spinner
-            text: "Sélectionner prêt"
-        TextInput:
-            id: montant_input
-            hint_text: "Montant"
-            multiline: False
-            input_filter: "float"
-        MDFlatButton:
-            text: "Enregistrer"
-            on_press: root.record_payment(loan_spinner.text, float(montant_input.text or 0))
+            font_style: "H4"
+            size_hint_y: None
+            height: "40dp"
+        GridLayout:
+            cols: 2
+            size_hint_y: None
+            height: "40dp"
+            padding: "16dp", "4dp"
+            MDLabel:
+                id: daily_label
+                text: "Jour: 0.00 CFA"
+                halign: "center"
+                font_style: "H6"
+            MDLabel:
+                id: weekly_label
+                text: "Semaine: 0.00 CFA"
+                halign: "center"
+                font_style: "H6"
+        GridLayout:
+            cols: 4
+            size_hint_y: None
+            height: "45dp"
+            padding: 0, 0
+            canvas.before:
+                Color:
+                    rgba: 0.85, 0.85, 0.85, 1
+                Rectangle:
+                    pos: self.pos
+                    size: self.size
+            MDLabel:
+                text: "Client"
+                bold: True
+                halign: "center"
+                size_hint_x: 0.3
+            MDLabel:
+                text: "Lampe"
+                bold: True
+                halign: "center"
+                size_hint_x: 0.3
+            MDLabel:
+                text: "Date"
+                bold: True
+                halign: "center"
+                size_hint_x: 0.2
+            MDLabel:
+                text: "Montant"
+                bold: True
+                halign: "center"
+                size_hint_x: 0.2
+        ScrollView:
+            size_hint_y: 1
+            GridLayout:
+                id: transactions_list
+                cols: 1
+                size_hint_y: None
+                height: self.minimum_height
+                spacing: 0
+                padding: 0
+        GridLayout:
+            cols: 3
+            size_hint_y: None
+            height: "45dp"
+            padding: "8dp"
+            spacing: "8dp"
+            Spinner:
+                id: loan_spinner
+                text: "Prêt"
+                size_hint_x: 0.4
+            TextInput:
+                id: montant_input
+                hint_text: "Montant"
+                multiline: False
+                input_filter: "float"
+                size_hint_x: 0.3
+            MDRaisedButton:
+                text: "Enregistrer"
+                size_hint_x: 0.3
+                on_press: root.record_payment(loan_spinner.text, float(montant_input.text or 0))
         MDFlatButton:
             text: "Retour"
-            on_press: root.manager.current = "dashboard"
+            font_size: "16sp"
+            size_hint_y: None
+            height: "48dp"
+            on_press: app.root.ids.screen_manager.current = "dashboard"
 </root>
