@@ -53,6 +53,15 @@
                 MDFlatButton:
                     text: "Quitter"
                     on_press: root.exit_app()
+    
+    MDLabel:
+        text: "Andréas 2026 circutlab"
+        halign: "center"
+        size_hint_y: None
+        height: "40dp"
+        font_style: "Caption"
+        theme_text_color: "Custom"
+        text_color: 0.6, 0.6, 0.6, 1
 
 <HeaderBar>:
     orientation: "horizontal"
@@ -245,28 +254,28 @@
                 height: self.minimum_height
                 spacing: 0
                 padding: 0
-        GridLayout:
-            cols: 3
+        BoxLayout:
+            orientation: "horizontal"
             spacing: "8dp"
             size_hint_y: None
             height: "60dp"
             padding: "8dp"
+            MDIconButton:
+                icon: "arrow-left"
+                on_release: app.root.ids.screen_manager.current = "dashboard"
             MDRaisedButton:
                 text: "Nouveau"
-                font_size: "16sp"
-                on_press: root.show_client_form("add")
+                font_size: "14sp"
+                on_release: root.show_client_form("add")
             MDRaisedButton:
                 text: "Modifier"
-                font_size: "16sp"
-                on_press: root.show_client_form("edit")
+                font_size: "14sp"
+                on_release: root.show_client_form("edit")
             MDRaisedButton:
                 text: "Supprimer"
-                font_size: "16sp"
-                bg_color: 0.9, 0.3, 0.3, 1
-                on_press: root.delete_client()
-        MDFlatButton:
-            text: "Retour au Tableau de Bord"
-            on_press: app.root.ids.screen_manager.current = "dashboard"
+                font_size: "14sp"
+                md_bg_color: 0.9, 0.3, 0.3, 1
+                on_release: root.delete_client()
 
 <InventoryScreen>:
     name: "inventory"
@@ -310,29 +319,28 @@
                 height: self.minimum_height
                 spacing: 0
                 padding: 0
-        GridLayout:
-            cols: 3
+        BoxLayout:
+            orientation: "horizontal"
             spacing: "8dp"
             size_hint_y: None
             height: "60dp"
             padding: "8dp"
+            MDIconButton:
+                icon: "arrow-left"
+                on_release: app.root.ids.screen_manager.current = "dashboard"
             MDRaisedButton:
                 text: "Nouveau"
-                font_size: "16sp"
-                on_press: root.show_lamp_form("add")
+                font_size: "14sp"
+                on_release: root.show_lamp_form("add")
             MDRaisedButton:
                 text: "Modifier"
-                font_size: "16sp"
-                on_press: root.show_lamp_form("edit")
+                font_size: "14sp"
+                on_release: root.show_lamp_form("edit")
             MDRaisedButton:
                 text: "Supprimer"
-                font_size: "16sp"
-                bg_color: 0.9, 0.3, 0.3, 1
-                on_press: root.delete_lamp()
-        MDFlatButton:
-            text: "Retour au Tableau de Bord"
-            font_size: "16sp"
-            on_press: app.root.ids.screen_manager.current = "dashboard"
+                font_size: "14sp"
+                md_bg_color: 0.9, 0.3, 0.3, 1
+                on_release: root.delete_lamp()
 
 <LampListItem>:
     size_hint_y: None
@@ -588,25 +596,28 @@
                     size_hint_x: 0.25
                     font_size: "14sp"
                     on_press: root.assign_lampe(client_spinner.text, lampe_spinner.text, montant_input.text)
-            GridLayout:
-                cols: 3
-                spacing: "8dp"
-                MDRaisedButton:
-                    text: "Clore"
-                    font_size: "14sp"
-                    size_hint_x: 0.33
-                    on_press: root.close_loan()
-                MDRaisedButton:
-                    text: "Supprimer"
-                    font_size: "14sp"
-                    size_hint_x: 0.33
-                    bg_color: 0.9, 0.3, 0.3, 1
-                    on_press: root.delete_loan()
-                MDFlatButton:
-                    text: "Retour"
-                    font_size: "14sp"
-                    size_hint_x: 0.33
-                    on_press: app.root.ids.screen_manager.current = "dashboard"
+        BoxLayout:
+            orientation: "horizontal"
+            size_hint_y: None
+            height: "60dp"
+            padding: "8dp"
+            spacing: "8dp"
+            MDIconButton:
+                icon: "arrow-left"
+                on_release: app.root.ids.screen_manager.current = "dashboard"
+            MDRaisedButton:
+                text: "Clore"
+                font_size: "14sp"
+                size_hint_x: 0.25
+                on_release: root.close_loan()
+            MDRaisedButton:
+                text: "Supprimer"
+                font_size: "14sp"
+                size_hint_x: 0.25
+                md_bg_color: 0.9, 0.3, 0.3, 1
+                on_release: root.delete_loan()
+            Widget:
+                size_hint_x: 0.25
 
 <PaymentScreen>:
     name: "payment"
@@ -689,14 +700,15 @@
             height: "60dp"
             padding: "8dp"
             spacing: "8dp"
-            MDRaisedButton:
-                text: "Retour"
-                size_hint_x: 0.5
-                on_press: app.root.ids.screen_manager.current = "dashboard"
+            MDIconButton:
+                icon: "arrow-left"
+                on_release: app.root.ids.screen_manager.current = "dashboard"
             MDRaisedButton:
                 text: "Actualiser"
+                size_hint_x: 0.25
+                on_release: root.refresh_clients()
+            Widget:
                 size_hint_x: 0.5
-                on_press: root.refresh_clients()
 </root>
 <HistoryScreen>:
     name: "history"
@@ -801,11 +813,12 @@
             height: "60dp"
             padding: "8dp"
             spacing: "8dp"
-            MDRaisedButton:
-                text: "Retour"
-                size_hint_x: 0.5
-                on_press: app.root.ids.screen_manager.current = "dashboard"
+            MDIconButton:
+                icon: "arrow-left"
+                on_release: app.root.ids.screen_manager.current = "dashboard"
             MDRaisedButton:
                 text: "Actualiser"
+                size_hint_x: 0.25
+                on_release: root.refresh_history()
+            Widget:
                 size_hint_x: 0.5
-                on_press: root.refresh_history()
