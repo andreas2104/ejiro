@@ -372,9 +372,9 @@ class ClientsScreen(MDScreen):
         except Exception as e:
             logger.error(f"Erreur show_client_form: {e}")
 
-    def refresh_clients(self):
+    def refresh_clients(self, query=None):
         db = get_database()
-        clients = db.get_all_clients()
+        clients = db.get_all_clients(query=query)
         self.ids.clients_list.clear_widgets()
         for c in clients:
             item = ClientListItem(
@@ -439,9 +439,9 @@ class InventoryScreen(MDScreen):
         Clock.schedule_once(lambda dt: self.refresh_inventory())
         self.modal = LampFormModal()
 
-    def refresh_inventory(self):
+    def refresh_inventory(self, query=None):
         db = get_database()
-        lamps = db.get_all_lamps()
+        lamps = db.get_all_lamps(query=query)
         self.ids.inventory_list.clear_widgets()
         for lamp in lamps:
             item = LampListItem(
@@ -665,10 +665,15 @@ class LoanScreen(MDScreen):
         ]
         if hasattr(self.ids, "lampe_spinner"):
             self.ids.lampe_spinner.values = [lamp["numero"] for lamp in available_lamps]
+        
+        # Pre-fill default rate
+        if hasattr(self.ids, "montant_input"):
+            default_rate = db.get_setting("default_rate", "1000")
+            self.ids.montant_input.text = default_rate
 
-    def refresh_loans(self):
+    def refresh_loans(self, query=None):
         db = get_database()
-        loans = db.get_all_loans()
+        loans = db.get_all_loans(query=query)
         self.ids.loans_list.clear_widgets()
         for loan in loans:
             item = LoanListItemWithSelect(
@@ -941,10 +946,16 @@ class HistoryScreen(MDScreen):
         self.total_filtered_amount = f"{total_sum:.0f} Ar"
 
 
+
+
+
 class LampManagerApp(MDApp):
+    business_name = StringProperty("e-Jiro")
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.database = DatabaseManager()
+        self.business_name = self.database.get_setting("business_name", "e-Jiro")
 
     def build(self):
         Builder.load_file("style.kv")

@@ -7,7 +7,7 @@
             icon: "menu"
             on_press: app.root.toggle_nav_drawer()
         MDLabel:
-            text: "e-Jiro"
+            text: app.business_name
             halign: "left"
             font_style: "H5"
             text_color: 1, 1, 1, 1
@@ -22,6 +22,7 @@
             HistoryScreen:
         MDNavigationDrawer:
             id: nav_drawer
+            width: "240dp"
             BoxLayout:
                 orientation: "vertical"
                 padding: "16dp"
@@ -33,25 +34,47 @@
                     height: "40dp"
                 MDFlatButton:
                     text: "Tableau de Bord"
+                    size_hint_x: 1
+                    theme_text_color: "Custom"
+                    text_color: 0, 0, 0, 1
                     on_press: app.root.ids.screen_manager.current = "dashboard"; app.root.ids.nav_drawer.set_state("close")
                 MDFlatButton:
                     text: "Clients"
+                    size_hint_x: 1
+                    theme_text_color: "Custom"
+                    text_color: 0, 0, 0, 1
                     on_press: app.root.ids.screen_manager.current = "clients"; app.root.ids.nav_drawer.set_state("close")
                 MDFlatButton:
                     text: "Lampes"
+                    size_hint_x: 1
+                    theme_text_color: "Custom"
+                    text_color: 0, 0, 0, 1
                     on_press: app.root.ids.screen_manager.current = "inventory"; app.root.ids.nav_drawer.set_state("close")
                 MDFlatButton:
                     text: "Prêts"
+                    size_hint_x: 1
+                    theme_text_color: "Custom"
+                    text_color: 0, 0, 0, 1
                     on_press: app.root.ids.screen_manager.current = "loan"; app.root.ids.nav_drawer.set_state("close")
                 MDFlatButton:
                     text: "Paiements"
+                    size_hint_x: 1
+                    theme_text_color: "Custom"
+                    text_color: 0, 0, 0, 1
                     on_press: app.root.ids.screen_manager.current = "payment"; app.root.ids.nav_drawer.set_state("close")
                 MDFlatButton:
                     text: "Historique"
+                    size_hint_x: 1
+                    theme_text_color: "Custom"
+                    text_color: 0, 0, 0, 1
                     on_press: app.root.ids.screen_manager.current = "history"; app.root.ids.nav_drawer.set_state("close")
+
                 Widget:
                 MDFlatButton:
                     text: "Quitter"
+                    size_hint_x: 1
+                    theme_text_color: "Custom"
+                    text_color: 0, 0, 0, 1
                     on_press: root.exit_app()
     
     MDLabel:
@@ -219,6 +242,15 @@
             font_style: "H4"
             size_hint_y: None
             height: "50dp"
+        MDTextField:
+            id: search_field
+            hint_text: "Rechercher un client (nom ou téléphone)..."
+            mode: "fill"
+            fill_color_normal: 0.95, 0.95, 0.95, 1
+            size_hint_y: None
+            height: "50dp"
+            icon_left: "magnify"
+            on_text: root.refresh_clients(self.text)
         GridLayout:
             cols: 3
             size_hint_y: None
@@ -289,6 +321,15 @@
             font_style: "H4"
             size_hint_y: None
             height: "50dp"
+        MDTextField:
+            id: search_field
+            hint_text: "Rechercher une lampe (numéro)..."
+            mode: "fill"
+            fill_color_normal: 0.95, 0.95, 0.95, 1
+            size_hint_y: None
+            height: "50dp"
+            icon_left: "magnify"
+            on_text: root.refresh_inventory(self.text)
         GridLayout:
             cols: 2
             size_hint_y: None
@@ -532,6 +573,15 @@
             font_style: "H4"
             size_hint_y: None
             height: "50dp"
+        MDTextField:
+            id: search_field
+            hint_text: "Rechercher un prêt (client ou lampe)..."
+            mode: "fill"
+            fill_color_normal: 0.95, 0.95, 0.95, 1
+            size_hint_y: None
+            height: "50dp"
+            icon_left: "magnify"
+            on_text: root.refresh_loans(self.text)
         GridLayout:
             cols: 3
             size_hint_y: None
@@ -571,7 +621,7 @@
         BoxLayout:
             orientation: "vertical"
             size_hint_y: None
-            height: "110dp"
+            height: "50dp"
             padding: "8dp"
             spacing: "8dp"
             GridLayout:
@@ -822,3 +872,5 @@
                 on_release: root.refresh_history()
             Widget:
                 size_hint_x: 0.5
+
+
