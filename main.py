@@ -228,6 +228,7 @@ class DashboardScreen(MDScreen):
     lamp_count = StringProperty("0")
     loan_count = StringProperty("0")
     daily_revenue = StringProperty("0 Ar")
+    total_revenue = StringProperty("0 Ar")
 
     def on_enter(self):
         Clock.schedule_once(lambda dt: self.update_stats())
@@ -235,6 +236,7 @@ class DashboardScreen(MDScreen):
     def update_stats(self):
         db = get_database()
         daily = db.get_daily_revenue()
+        total = db.get_total_revenue()
         client_count = db.get_clients_count()
         lamp_count = db.get_lamps_count()
         loan_count = db.get_active_loans_count()
@@ -243,6 +245,7 @@ class DashboardScreen(MDScreen):
         self.lamp_count = str(lamp_count)
         self.loan_count = str(loan_count)
         self.daily_revenue = f"{daily:.0f} Ar"
+        self.total_revenue = f"{total:.0f} Ar"
 
 
 class ClientFormModal(Popup):
@@ -877,6 +880,65 @@ class PaymentScreen(MDScreen):
                 if lamp["is_paid"]:
                     day_total += lamp["montant"]
         self.ids.total_label.text = f"Total: {day_total:.0f} Ar"
+
+class HistoryScreen(MDScreen):
+    selected_date = StringProperty("")
+    total_filtered_amount = StringProperty("0 Ar")
+
+    def on_enter(self):
+        Clock.schedule_once(lambda dt: self.refresh_history())
+
+    def on_selected_date(self, instance, value):
+        if hasattr(self.ids, "date_filter_label"):
+            self.ids.date_filter_label.text = f"Date: {value}" if value else "Tous les paiements"
+        Clock.schedule_once(lambda dt: self.refresh_history())
+
+    def show_date_picker(self):
+        date_dialog = MDDatePicker()
+        if self.selected_date:
+            try:
+                d = datetime.strptime(self.selected_date, "%Y-%m-%d")
+                date_dialog.year = d.year
+                date_dialog.month = d.month
+                date_dialog.day = d.day
+            except Exception:
+                pass
+        date_dialog.bind(on_save=self.on_date_save)
+        date_dialog.open()
+
+    def on_date_save(self, instance, value, date_range):
+        self.selected_date = value.isoformat()
+
+    def clear_filter(self):
+        self.selected_date = ""
+
+    def refresh_history(self):
+        db = get_database()
+        if self.selected_date:
+            transactions = db.get_transactions_on_date(self.selected_date)
+        else:
+            transactions = db.get_all_transactions()
+
+        self.ids.history_list.clear_widgets()
+        total_sum = 0
+        for t in transactions:
+            try:
+                dt = datetime.fromisoformat(t["date_paiement"])
+                date_str = dt.strftime("%Y-%m-%d %H:%M")
+            except Exception:
+                date_str = t["date_paiement"][:16]
+
+            item = TransactionListItem(
+                client_nom=t["client_nom"],
+                lampe_numero=t["lamps_numero"],
+                date_paiement=date_str,
+                montant=f"{t['montant']:.0f} Ar",
+            )
+            item.transaction_id = t["id"]
+            self.ids.history_list.add_widget(item)
+            total_sum += t["montant"]
+
+        self.total_filtered_amount = f"{total_sum:.0f} Ar"
 
 
 class LampManagerApp(MDApp):

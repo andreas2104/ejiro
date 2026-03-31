@@ -371,6 +371,13 @@ class DatabaseManager:
             result = cursor.fetchone()[0]
             return result if result else 0.0
 
+    def get_total_revenue(self) -> float:
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT SUM(montant) FROM transactions")
+            result = cursor.fetchone()[0]
+            return result if result else 0.0
+
     def get_all_transactions(self) -> List[Dict[str, Any]]:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
@@ -382,6 +389,31 @@ class DatabaseManager:
                 JOIN lamps l ON p.lampe_id = l.id
                 ORDER BY t.date_paiement DESC
             """)
+            rows = cursor.fetchall()
+            return [
+                {
+                    "id": r[0],
+                    "client_nom": r[1],
+                    "lamps_numero": r[2],
+                    "date_paiement": r[3],
+                    "montant": r[4],
+                    "type": r[5],
+                }
+                for r in rows
+            ]
+
+    def get_transactions_on_date(self, date_str: str) -> List[Dict[str, Any]]:
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT t.id, c.nom, l.numero, t.date_paiement, t.montant, t.type
+                FROM transactions t
+                JOIN prets p ON t.pret_id = p.id
+                JOIN clients c ON p.client_id = c.id
+                JOIN lamps l ON p.lampe_id = l.id
+                WHERE t.date_paiement LIKE ?
+                ORDER BY t.date_paiement DESC
+            """, (f"{date_str}%",))
             rows = cursor.fetchall()
             return [
                 {
