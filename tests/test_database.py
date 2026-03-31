@@ -168,3 +168,93 @@ class TestPretEndToEnd:
 
         unpaid = db_manager.get_unpaid_loans_today()
         assert len(unpaid) == 0
+
+    def test_client_with_multiple_lamps_payment_workflow(self, db_manager):
+        client_id = db_manager.add_client("Rasoa", "0321234567", "Antananarivo")
+        lamp1 = db_manager.add_lamp_with_etat("A001", "disponible")
+        lamp2 = db_manager.add_lamp_with_etat("A002", "disponible")
+        lamp3 = db_manager.add_lamp_with_etat("A003", "disponible")
+
+        loan1 = db_manager.assign_lamps_to_client(client_id, lamp1, 1000.0)
+        loan2 = db_manager.assign_lamps_to_client(client_id, lamp2, 1500.0)
+        loan3 = db_manager.assign_lamps_to_client(client_id, lamp3, 2000.0)
+
+        clients = db_manager.get_unpaid_clients_today()
+        assert len(clients) == 1
+        assert clients[0]["client_nom"] == "Rasoa"
+        assert len(clients[0]["lamps"]) == 3
+        assert clients[0]["total_journalier"] == 4500.0
+
+        lamp1_info = next(l for l in clients[0]["lamps"] if l["numero"] == "A001")
+        assert lamp1_info["montant"] == 1000.0
+
+        db_manager.record_payment(loan1, 1000.0)
+        db_manager.record_payment(loan2, 1500.0)
+        db_manager.record_payment(loan3, 2000.0)
+
+        clients_after = db_manager.get_unpaid_clients_today()
+        assert len(clients_after) == 0
+
+        daily_rev = db_manager.get_daily_revenue()
+        assert daily_rev == 4500.0
+
+    def test_pret_list_shows_client_details_on_click(self, db_manager):
+        client1 = db_manager.add_client("Rasoa", "0321111111", "Tana")
+        client2 = db_manager.add_client("Jean", "0322222222", "Cotonou")
+
+        lamp1 = db_manager.add_lamp_with_etat("B001", "disponible")
+        lamp2 = db_manager.add_lamp_with_etat("B002", "disponible")
+        lamp3 = db_manager.add_lamp_with_etat("B003", "disponible")
+
+        loan1 = db_manager.assign_lamps_to_client(client1, lamp1, 800.0)
+        loan2 = db_manager.assign_lamps_to_client(client2, lamp2, 600.0)
+        _ = db_manager.assign_lamps_to_client(client1, lamp3, 1200.0)
+
+        all_loans = db_manager.get_all_loans()
+        assert len(all_loans) == 3
+
+        loans_rasoa = [l for l in all_loans if l["client_nom"] == "Rasoa"]
+        assert len(loans_rasoa) == 2
+        assert sum(l["montant_journalier"] for l in loans_rasoa) == 2000.0
+
+        loans_jean = [l for l in all_loans if l["client_nom"] == "Jean"]
+        assert len(loans_jean) == 1
+        assert loans_jean[0]["lamps_numero"] == "B002"
+
+    def test_lamp_state_transitions_in_pret(self, db_manager):
+        client_id = db_manager.add_client("Test", "0330000000", "TestCity")
+
+        lamp1 = db_manager.add_lamp_with_etat("LAMP001", "disponible")
+        lamp2 = db_manager.add_lamp_with_etat("LAMP002", "disponible")
+
+        all_lamps = db_manager.get_all_lamps()
+        assert len(all_lamps) == 2
+
+        disponibles = [l for l in all_lamps if l["etat"] == "disponible"]
+        assert len(disponibles) == 2
+
+        loan1 = db_manager.assign_lamps_to_client(client_id, lamp1, 500.0)
+        lamp1_after = db_manager.get_lamp_by_id(lamp1)
+        assert lamp1_after["etat"] == "louée"
+
+        disponibles_after = [
+            l for l in db_manager.get_all_lamps() if l["etat"] == "disponible"
+        ]
+        assert len(disponibles_after) == 1
+
+        loan2 = db_manager.assign_lamps_to_client(client_id, lamp2, 700.0)
+        lamp2_after = db_manager.get_lamp_by_id(lamp2)
+        assert lamp2_after["etat"] == "louée"
+
+        db_manager.close_loan(loan1)
+        lamp1_closed = db_manager.get_lamp_by_id(lamp1)
+        assert lamp1_closed["etat"] == "disponible"
+
+        db_manager.close_loan(loan2)
+        lamp2_closed = db_manager.get_lamp_by_id(lamp2)
+        assert lamp2_closed["etat"] == "disponible"
+
+        all_disponibles = [
+            l for l in db_manager.get_all_lamps() if l["etat"] == "disponible"
+        ]
+        assert len(all_disponibles) == 2

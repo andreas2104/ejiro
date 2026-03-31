@@ -103,47 +103,83 @@
             shorten: True
             shorten_from: "right"
 
+<StatCard>:
+    orientation: "vertical"
+    padding: "12dp"
+    spacing: "8dp"
+    md_bg_color: 0.95, 0.95, 0.95, 1
+    radius: [12, 12, 12, 12]
+    ripple_behavior: True
+    
+    MDIcon:
+        icon: root.icon
+        font_size: "36sp"
+        halign: "center"
+        theme_text_color: "Primary"
+        size_hint_y: 0.4
+        
+    MDLabel:
+        text: root.title
+        font_style: "Caption"
+        halign: "center"
+        size_hint_y: 0.2
+        theme_text_color: "Secondary"
+            
+    MDLabel:
+        text: root.value
+        font_style: "H5"
+        halign: "center"
+        bold: True
+        size_hint_y: 0.4
+        theme_text_color: "Custom"
+        text_color: 0.1, 0.1, 0.1, 1
+
 <DashboardScreen>:
     name: "dashboard"
     BoxLayout:
         orientation: "vertical"
-        padding: "16dp", "8dp"
-        spacing: "8dp"
+        padding: "20dp"
+        spacing: "20dp"
+        
         MDLabel:
-            id: daily_label
-            text: "Journalier: 0.00 CFA"
+            text: "Tableau de Bord"
             halign: "center"
             font_style: "H4"
             size_hint_y: None
-            height: "60dp"
-        MDLabel:
-            id: weekly_label
-            text: "Hebdomadaire: 0.00 CFA"
-            halign: "center"
-            font_style: "H5"
-            size_hint_y: None
-            height: "40dp"
+            height: "80dp"
+            bold: True
+            theme_text_color: "Primary"
+
         GridLayout:
             cols: 2
-            spacing: "12dp"
+            spacing: "20dp"
             size_hint_y: None
-            height: "180dp"
-            MDFlatButton:
-                text: "Clients"
-                font_size: "18sp"
-                on_press: app.root.ids.screen_manager.current = "clients"
-            MDFlatButton:
-                text: "Lamp"
-                font_size: "18sp"
-                on_press: app.root.ids.screen_manager.current = "inventory"
-            MDFlatButton:
-                text: "Prêt"
-                font_size: "18sp"
-                on_press: app.root.ids.screen_manager.current = "loan"
-            MDFlatButton:
-                text: "Paiement"
-                font_size: "18sp"
-                on_press: app.root.ids.screen_manager.current = "payment"
+            height: "320dp"
+            
+            StatCard:
+                title: "Clients"
+                icon: "account-group"
+                value: root.client_count
+                on_release: app.root.ids.screen_manager.current = "clients"
+                
+            StatCard:
+                title: "Lampes"
+                icon: "lamp"
+                value: root.lamp_count
+                on_release: app.root.ids.screen_manager.current = "inventory"
+                
+            StatCard:
+                title: "Prêts Actifs"
+                icon: "handshake"
+                value: root.loan_count
+                on_release: app.root.ids.screen_manager.current = "loan"
+                
+            StatCard:
+                title: "Revenu Jour"
+                icon: "cash-multiple"
+                value: root.daily_revenue
+                on_release: app.root.ids.screen_manager.current = "payment"
+
         Widget:
 
 <ClientsScreen>:
@@ -329,31 +365,96 @@
         size_hint_x: 1
         MDLabel:
             text: root.client_nom
-            size_hint_x: 0.35
+            size_hint_x: 0.4
             halign: "center"
             font_size: "16sp"
             shorten: True
             shorten_from: "right"
         MDLabel:
             text: root.lampe_numero
-            size_hint_x: 0.25
+            size_hint_x: 0.3
             halign: "center"
             font_size: "16sp"
         MDLabel:
-            text: root.montant_journalier + " CFA"
-            size_hint_x: 0.2
+            text: root.montant_journalier + " Ar"
+            size_hint_x: 0.3
             halign: "center"
             font_size: "16sp"
+
+<LoanListItemWithSelect>:
+    size_hint_y: None
+    height: "60dp"
+    padding: 0, 0
+    canvas.before:
+        Color:
+            rgba: 0.9, 0.9, 0.9, 1
+        Rectangle:
+            pos: self.pos
+            size: self.size
+        Color:
+            rgba: 0.7, 0.7, 0.7, 1
+        Line:
+            points: self.x, self.y, self.x + self.width, self.y
+    BoxLayout:
+        orientation: "horizontal"
+        size_hint_x: 1
+        MDLabel:
+            text: root.client_nom
+            size_hint_x: 0.4
+            halign: "center"
+            font_size: "16sp"
+            shorten: True
+            shorten_from: "right"
+        MDLabel:
+            text: root.lampe_numero
+            size_hint_x: 0.3
+            halign: "center"
+            font_size: "16sp"
+        MDLabel:
+            text: root.montant_journalier + " Ar"
+            size_hint_x: 0.3
+            halign: "center"
+            font_size: "16sp"
+
+<ClientPaymentItem>:
+    size_hint_y: None
+    height: "60dp"
+    padding: 0, 0
+    canvas.before:
+        Color:
+            rgba: 0.9, 0.9, 0.9, 1
+        Rectangle:
+            pos: self.pos
+            size: self.size
+        Color:
+            rgba: 0.7, 0.7, 0.7, 1
+        Line:
+            points: self.x, self.y, self.x + self.width, self.y
+    BoxLayout:
+        orientation: "horizontal"
+        size_hint_x: 1
+        BoxLayout:
+            orientation: "vertical"
+            size_hint_x: 0.9
+            padding: "8dp", "4dp"
+            MDLabel:
+                text: root.client_nom
+                bold: True
+                font_size: "16sp"
+            MDLabel:
+                text: "Lamps: " + root.lamps_info
+                font_size: "12sp"
+                theme_text_color: "Secondary"
+            MDLabel:
+                text: root.client_adresse
+                font_size: "12sp"
+                shorten: True
+                shorten_from: "right"
         CheckBox:
             id: paid_checkbox
-            size_hint_x: 0.2
+            size_hint_x: 0.1
             active: root.is_paid
-            on_active: root.dispatch("on_paid_toggle", self.active)
-            canvas.before:
-                Color:
-                    rgba: 0.3, 0.3, 0.3, 1
-                Line:
-                    rectangle: self.x, self.y, self.width, self.height
+            on_active: root.on_paid_toggle(self.active)
 
 <TransactionListItem>:
     size_hint_y: None
@@ -408,7 +509,7 @@
             size_hint_y: None
             height: "50dp"
         GridLayout:
-            cols: 4
+            cols: 3
             size_hint_y: None
             height: "45dp"
             padding: 0, 0
@@ -422,133 +523,17 @@
                 text: "Client"
                 bold: True
                 halign: "center"
-                size_hint_x: 0.3
+                size_hint_x: 0.4
             MDLabel:
                 text: "Lampe"
                 bold: True
                 halign: "center"
                 size_hint_x: 0.3
             MDLabel:
-                text: "Date"
+                text: "Montant/Jour"
                 bold: True
                 halign: "center"
-                size_hint_x: 0.2
-            MDLabel:
-                text: "Statut"
-                bold: True
-                halign: "center"
-                size_hint_x: 0.2
-        ScrollView:
-            size_hint_y: 1
-            GridLayout:
-                id: loans_list
-                cols: 1
-                size_hint_y: None
-                height: self.minimum_height
-                spacing: 0
-                padding: 0
-        GridLayout:
-            cols: 3
-            size_hint_y: None
-            height: "45dp"
-            padding: "8dp"
-            spacing: "8dp"
-            Spinner:
-                id: client_spinner
-                text: "Client"
-                size_hint_x: 0.25
-            Spinner:
-                id: lampe_spinner
-                text: "Lampe"
-                size_hint_x: 0.25
-            TextInput:
-                id: montant_input
-                hint_text: "Prix/jour"
-                multiline: False
-                input_filter: "float"
-                size_hint_x: 0.25
-                foreground_color: 0, 0, 0, 1
-            MDRaisedButton:
-                text: "Créer"
-                size_hint_x: 0.25
-                on_press: root.assign_lampe(client_spinner.text, lampe_spinner.text, montant_input.text)
-        GridLayout:
-            cols: 3
-            spacing: "8dp"
-            size_hint_y: None
-            height: "60dp"
-            padding: "8dp"
-            MDRaisedButton:
-                text: "Clore"
-                font_size: "16sp"
-                on_press: root.close_loan()
-            MDRaisedButton:
-                text: "Supprimer"
-                font_size: "16sp"
-                bg_color: 0.9, 0.3, 0.3, 1
-                on_press: root.delete_loan()
-            MDFlatButton:
-                text: "Retour"
-                font_size: "16sp"
-                on_press: app.root.ids.screen_manager.current = "dashboard"
-
-<PaymentScreen>:
-    name: "payment"
-    BoxLayout:
-        orientation: "vertical"
-        padding: 0
-        spacing: 0
-        MDLabel:
-            text: "Paiements"
-            halign: "center"
-            font_style: "H4"
-            size_hint_y: None
-            height: "40dp"
-        GridLayout:
-            cols: 2
-            size_hint_y: None
-            height: "40dp"
-            padding: "16dp", "4dp"
-            MDLabel:
-                id: daily_label
-                text: "Jour: 0.00 CFA"
-                halign: "center"
-                font_style: "H6"
-            MDLabel:
-                id: weekly_label
-                text: "Semaine: 0.00 CFA"
-                halign: "center"
-                font_style: "H6"
-        GridLayout:
-            cols: 4
-            size_hint_y: None
-            height: "45dp"
-            padding: 0, 0
-            canvas.before:
-                Color:
-                    rgba: 0.85, 0.85, 0.85, 1
-                Rectangle:
-                    pos: self.pos
-                    size: self.size
-            MDLabel:
-                text: "Client"
-                bold: True
-                halign: "center"
-                size_hint_x: 0.35
-            MDLabel:
-                text: "Lampe"
-                bold: True
-                halign: "center"
-                size_hint_x: 0.25
-            MDLabel:
-                text: "Prix/Jour"
-                bold: True
-                halign: "center"
-                size_hint_x: 0.2
-            MDLabel:
-                text: "Payé"
-                bold: True
-                halign: "center"
+                size_hint_x: 0.3
                 size_hint_x: 0.2
         ScrollView:
             size_hint_y: 1
@@ -560,17 +545,140 @@
                 spacing: 0
                 padding: 0
         BoxLayout:
+            orientation: "vertical"
+            size_hint_y: None
+            height: "110dp"
+            padding: "8dp"
+            spacing: "8dp"
+            GridLayout:
+                cols: 4
+                spacing: "8dp"
+                Spinner:
+                    id: client_spinner
+                    text: "Client"
+                    size_hint_x: 0.25
+                Spinner:
+                    id: lampe_spinner
+                    text: "Lampe"
+                    size_hint_x: 0.25
+                TextInput:
+                    id: montant_input
+                    hint_text: "Ar/jour"
+                    multiline: False
+                    input_filter: "float"
+                    size_hint_x: 0.25
+                MDRaisedButton:
+                    text: "Créer"
+                    size_hint_x: 0.25
+                    font_size: "14sp"
+                    on_press: root.assign_lampe(client_spinner.text, lampe_spinner.text, montant_input.text)
+            GridLayout:
+                cols: 3
+                spacing: "8dp"
+                MDRaisedButton:
+                    text: "Clore"
+                    font_size: "14sp"
+                    size_hint_x: 0.33
+                    on_press: root.close_loan()
+                MDRaisedButton:
+                    text: "Supprimer"
+                    font_size: "14sp"
+                    size_hint_x: 0.33
+                    bg_color: 0.9, 0.3, 0.3, 1
+                    on_press: root.delete_loan()
+                MDFlatButton:
+                    text: "Retour"
+                    font_size: "14sp"
+                    size_hint_x: 0.33
+                    on_press: app.root.ids.screen_manager.current = "dashboard"
+
+<PaymentScreen>:
+    name: "payment"
+    BoxLayout:
+        orientation: "vertical"
+        padding: 0
+        spacing: 0
+        
+        BoxLayout:
             orientation: "horizontal"
             size_hint_y: None
-            height: "40dp"
-            padding: "8dp"
-            MDRaisedButton:
-                text: "Tout Marquer Payé"
-                on_press: root.mark_all_paid()
-        MDFlatButton:
-            text: "Retour"
-            font_size: "16sp"
+            height: "56dp"
+            padding: "16dp", "8dp"
+            spacing: "12dp"
+            canvas.before:
+                Color:
+                    rgba: 0.25, 0.25, 0.25, 1
+                Rectangle:
+                    pos: self.pos
+                    size: self.size
+            
+            MDIconButton:
+                icon: "calendar"
+                theme_text_color: "Custom"
+                text_color: 1, 1, 1, 1
+                on_release: root.show_date_picker()
+            
+            BoxLayout:
+                orientation: "vertical"
+                MDLabel:
+                    id: date_label
+                    text: "Date: "
+                    theme_text_color: "Custom"
+                    text_color: 1, 1, 1, 1
+                    font_style: "Subtitle1"
+                    bold: True
+                MDLabel:
+                    id: total_label
+                    text: "Total: 0 Ar"
+                    theme_text_color: "Custom"
+                    text_color: 0.1, 0.8, 0.1, 1
+                    font_style: "Caption"
+                    bold: True
+
+        GridLayout:
+            cols: 2
             size_hint_y: None
-            height: "48dp"
-            on_press: app.root.ids.screen_manager.current = "dashboard"
+            height: "40dp"
+            padding: 0, 0
+            canvas.before:
+                Color:
+                    rgba: 0.8, 0.8, 0.8, 1
+                Rectangle:
+                    pos: self.pos
+                    size: self.size
+            MDLabel:
+                text: "Client / Lamps"
+                bold: True
+                halign: "center"
+                size_hint_x: 0.9
+            MDLabel:
+                text: "Payé"
+                bold: True
+                halign: "center"
+                size_hint_x: 0.1
+
+        ScrollView:
+            size_hint_y: 1
+            GridLayout:
+                id: loans_list
+                cols: 1
+                size_hint_y: None
+                height: self.minimum_height
+                spacing: 0
+                padding: 0
+        
+        BoxLayout:
+            orientation: "horizontal"
+            size_hint_y: None
+            height: "60dp"
+            padding: "8dp"
+            spacing: "8dp"
+            MDRaisedButton:
+                text: "Retour"
+                size_hint_x: 0.5
+                on_press: app.root.ids.screen_manager.current = "dashboard"
+            MDRaisedButton:
+                text: "Actualiser"
+                size_hint_x: 0.5
+                on_press: root.refresh_clients()
 </root>

@@ -14,6 +14,7 @@ from kivymd.uix.card import MDCard
 from kivymd.uix.label import MDLabel
 from kivymd.uix.textfield import MDTextField
 from kivymd.uix.button import MDRaisedButton
+from kivymd.uix.pickers import MDDatePicker
 
 from database import DatabaseManager
 
@@ -70,20 +71,38 @@ class LampListItem(ButtonBehavior, BoxLayout):
     lamp_id = None
 
 
-class LoanListItem(ButtonBehavior, BoxLayout):
+class LoanListItem(BoxLayout):
     client_nom = StringProperty()
     lampe_numero = StringProperty()
     montant_journalier = StringProperty()
-    is_paid = BooleanProperty(False)
     loan_id = None
-    loan_data = None
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.register_event_type("on_paid_toggle")
 
-    def on_paid_toggle(self, *args):
-        pass
+
+class LoanListItemWithSelect(ButtonBehavior, BoxLayout):
+    client_nom = StringProperty()
+    lampe_numero = StringProperty()
+    montant_journalier = StringProperty()
+    loan_id = None
+
+
+class ClientPaymentItem(ButtonBehavior, BoxLayout):
+    client_nom = StringProperty()
+    client_telephone = StringProperty()
+    client_adresse = StringProperty()
+    total_journalier = StringProperty()
+    lamps_info = StringProperty()
+    is_paid = BooleanProperty(False)
+    client_id = None
+    pret_id = None
+    client_data = None
+
+    def on_paid_toggle(self, is_paid):
+        app = App.get_running_app()
+        payment_screen = app.root.ids.screen_manager.get_screen("payment")
+        payment_screen.on_client_paid_toggle(self, is_paid)
 
 
 class TransactionListItem(ButtonBehavior, BoxLayout):
@@ -92,6 +111,12 @@ class TransactionListItem(ButtonBehavior, BoxLayout):
     date_paiement = StringProperty()
     montant = StringProperty()
     transaction_id = None
+
+
+class StatCard(MDCard, ButtonBehavior):
+    title = StringProperty()
+    value = StringProperty()
+    icon = StringProperty()
 
 
 class LampFormModal(Popup):
@@ -199,15 +224,25 @@ def get_database() -> DatabaseManager:
 
 
 class DashboardScreen(MDScreen):
-    def on_enter(self):
-        Clock.schedule_once(lambda dt: self.update_revenue())
+    client_count = StringProperty("0")
+    lamp_count = StringProperty("0")
+    loan_count = StringProperty("0")
+    daily_revenue = StringProperty("0 Ar")
 
-    def update_revenue(self):
+    def on_enter(self):
+        Clock.schedule_once(lambda dt: self.update_stats())
+
+    def update_stats(self):
         db = get_database()
         daily = db.get_daily_revenue()
-        weekly = db.get_weekly_revenue()
-        self.ids.daily_label.text = f"Journalier: {daily:.2f} CFA"
-        self.ids.weekly_label.text = f"Hebdomadaire: {weekly:.2f} CFA"
+        client_count = db.get_clients_count()
+        lamp_count = db.get_lamps_count()
+        loan_count = db.get_active_loans_count()
+
+        self.client_count = str(client_count)
+        self.lamp_count = str(lamp_count)
+        self.loan_count = str(loan_count)
+        self.daily_revenue = f"{daily:.0f} Ar"
 
 
 class ClientFormModal(Popup):
@@ -478,6 +513,134 @@ class InventoryScreen(MDScreen):
         self.delete_popup.dismiss()
 
 
+class LoanFormModal(Popup):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.loan_screen = None
+        self.client_spinner = None
+        self.lampe_spinner = None
+        self.montant_input = None
+        self.form_title = None
+        self.save_button = None
+        self._build_ui()
+
+    def _build_ui(self):
+        card = MDCard(
+            orientation="vertical",
+            padding="24dp",
+            spacing="16dp",
+            md_bg_color=(1, 1, 1, 1),
+        )
+
+        self.form_title = MDLabel(
+            text="Nouveau Prêt",
+            font_style="H5",
+            halign="center",
+            size_hint_y=None,
+            height="40dp",
+            theme_text_color="Custom",
+            text_color=(0, 0, 0, 1),
+        )
+        card.add_widget(self.form_title)
+
+        from kivy.uix.spinner import Spinner
+
+        self.client_spinner = Spinner(
+            text="Sélectionner Client",
+            values=[],
+            size_hint_y=None,
+            height="48dp",
+        )
+        card.add_widget(self.client_spinner)
+
+        self.lampe_spinner = Spinner(
+            text="Sélectionner Lampe",
+            values=[],
+            size_hint_y=None,
+            height="48dp",
+        )
+        card.add_widget(self.lampe_spinner)
+
+        self.montant_input = MDTextField(
+            hint_text="Montant journalier (Ar)",
+            mode="rectangle",
+            size_hint_y=None,
+            height="48dp",
+            input_filter="float",
+        )
+        card.add_widget(self.montant_input)
+
+        btn_layout = BoxLayout(size_hint_y=None, height="48dp", spacing="12dp")
+        self.save_button = MDRaisedButton(text="Ajouter", on_press=self.save_from_modal)
+        cancel_button = MDRaisedButton(text="Annuler", on_press=self.dismiss)
+        btn_layout.add_widget(self.save_button)
+        btn_layout.add_widget(cancel_button)
+        card.add_widget(btn_layout)
+
+        self.add_widget(card)
+
+    def open(self, loan_screen):
+        self.loan_screen = loan_screen
+        db = get_database()
+
+        # Populate clients
+        clients = db.get_all_clients()
+        self.client_spinner.values = [c["nom"] for c in clients]
+        self.client_spinner.text = "Sélectionner Client"
+
+        # Populate available lamps
+        available_lamps = [
+            lamp for lamp in db.get_all_lamps() if lamp["etat"] == "disponible"
+        ]
+        self.lampe_spinner.values = [lamp["numero"] for lamp in available_lamps]
+        self.lampe_spinner.text = "Sélectionner Lampe"
+
+        self.montant_input.text = ""
+        super().open()
+
+    def save_from_modal(self, *args):
+        client_nom = self.client_spinner.text
+        lampe_numero = self.lampe_spinner.text
+        montant_text = self.montant_input.text.strip()
+
+        if client_nom == "Sélectionner Client" or lampe_numero == "Sélectionner Lampe":
+            logger.warning("Veuillez sélectionner un client et une lampe")
+            return
+
+        try:
+            montant_journalier = float(montant_text) if montant_text else 0
+        except ValueError:
+            logger.warning("Montant invalide")
+            return
+
+        if montant_journalier <= 0:
+            logger.warning("Le montant doit être positif")
+            return
+
+        db = get_database()
+        clients = db.get_all_clients()
+        client = next((c for c in clients if c["nom"] == client_nom), None)
+        lampe = next(
+            (lamp for lamp in db.get_all_lamps() if lamp["numero"] == lampe_numero),
+            None,
+        )
+
+        if not client or not lampe:
+            logger.warning("Données invalides")
+            return
+
+        try:
+            db.assign_lamps_to_client(client["id"], lampe["id"], montant_journalier)
+            logger.info(f"Prêt créé: {montant_journalier}/jour")
+            self.loan_screen.refresh_loans()
+            self.dismiss()
+        except Exception as e:
+            logger.error(f"Erreur: {e}")
+
+    def dismiss(self, *args):
+        super().dismiss()
+
+
 class LoanScreen(MDScreen):
     selected_loan_id = None
 
@@ -485,28 +648,33 @@ class LoanScreen(MDScreen):
         Clock.schedule_once(lambda dt: self.load_data())
         Clock.schedule_once(lambda dt: self.refresh_loans())
 
+    def show_loan_form(self, *args):
+        # We might not need this anymore if we are using on-screen creation
+        pass
+
     def load_data(self):
         db = get_database()
         clients = db.get_all_clients()
-        self.ids.client_spinner.values = [c["nom"] for c in clients]
+        if hasattr(self.ids, "client_spinner"):
+            self.ids.client_spinner.values = [c["nom"] for c in clients]
         available_lamps = [
             lamp for lamp in db.get_all_lamps() if lamp["etat"] == "disponible"
         ]
-        self.ids.lampe_spinner.values = [lamp["numero"] for lamp in available_lamps]
+        if hasattr(self.ids, "lampe_spinner"):
+            self.ids.lampe_spinner.values = [lamp["numero"] for lamp in available_lamps]
 
     def refresh_loans(self):
         db = get_database()
         loans = db.get_all_loans()
         self.ids.loans_list.clear_widgets()
         for loan in loans:
-            item = LoanListItem(
+            item = LoanListItemWithSelect(
                 client_nom=loan["client_nom"],
-                lampe_numero=loan["lampe_numero"],
-                date_debut=loan["date_debut"][:10],
-                statut=loan["statut"],
+                lampe_numero=loan["lamps_numero"],
+                montant_journalier=f"{loan['montant_journalier']:.0f}",
             )
             item.loan_id = loan["id"]
-            item.bind(on_press=lambda instance: self.select_loan(instance.loan_id))
+            item.bind(on_press=lambda inst: self.select_loan(inst.loan_id))
             self.ids.loans_list.add_widget(item)
         self.selected_loan_id = None
 
@@ -630,65 +798,85 @@ class LoanScreen(MDScreen):
 
 
 class PaymentScreen(MDScreen):
-    def on_enter(self):
-        Clock.schedule_once(lambda dt: self.refresh_loans())
+    selected_date = StringProperty("")
 
-    def refresh_loans(self):
+    def on_enter(self):
+        if not self.selected_date:
+            self.selected_date = datetime.now().date().isoformat()
+        Clock.schedule_once(lambda dt: self.refresh_clients())
+
+    def on_selected_date(self, instance, value):
+        if hasattr(self.ids, "date_label"):
+            self.ids.date_label.text = f"Date: {value}"
+        Clock.schedule_once(lambda dt: self.refresh_clients())
+
+    def show_date_picker(self):
+        date_dialog = MDDatePicker()
+        if self.selected_date:
+            try:
+                # Expecting YYYY-MM-DD
+                d = datetime.strptime(self.selected_date, "%Y-%m-%d")
+                date_dialog.year = d.year
+                date_dialog.month = d.month
+                date_dialog.day = d.day
+            except Exception as e:
+                logger.error(f"Error parsing date: {e}")
+        date_dialog.bind(on_save=self.on_date_save)
+        date_dialog.open()
+
+    def on_date_save(self, instance, value, date_range):
+        self.selected_date = value.isoformat()
+
+    def refresh_clients(self):
         db = get_database()
-        unpaid_loans = db.get_unpaid_loans_today()
+        if not self.selected_date:
+            self.selected_date = datetime.now().date().isoformat()
+
+        data = db.get_payments_by_date(self.selected_date)
         self.ids.loans_list.clear_widgets()
 
-        today = datetime.now().date().isoformat()
-
-        for loan in unpaid_loans:
-            item = LoanListItem(
-                client_nom=loan["client_nom"],
-                lampe_numero=loan["lamps_numero"],
-                montant_journalier=f"{loan['montant_journalier']:.0f}",
-                is_paid=False,
-            )
-            item.loan_id = loan["id"]
-            item.loan_data = loan
-            item.bind(on_paid_toggle=self.on_loan_paid_toggle)
-            self.ids.loans_list.add_widget(item)
-
-        self.update_summary()
-
-    def on_loan_paid_toggle(self, instance, value):
-        if value and instance.loan_data:
-            db = get_database()
-            try:
-                db.record_payment(
-                    instance.loan_id, instance.loan_data["montant_journalier"]
+        day_total = 0
+        for client in data:
+            for lamp in client["lamps"]:
+                item = ClientPaymentItem(
+                    client_nom=client["client_nom"],
+                    client_telephone=client["client_telephone"],
+                    client_adresse=client["client_adresse"] or "Pas d'adresse",
+                    lamps_info=f"Lampe {lamp['numero']}",
+                    is_paid=lamp["is_paid"],
                 )
-                logger.info(f"Paiement enregistré pour prêt {instance.loan_id}")
-                self.refresh_loans()
-            except Exception as e:
-                logger.error(f"Erreur: {e}")
+                item.client_id = client["client_id"]
+                item.pret_id = lamp["pret_id"]
+                item.client_data = lamp
+                self.ids.loans_list.add_widget(item)
+                if lamp["is_paid"]:
+                    day_total += lamp["montant"]
 
-    def mark_all_paid(self):
+        self.ids.total_label.text = f"Total: {day_total:.0f} Ar"
+
+    def on_client_paid_toggle(self, item, is_paid):
         db = get_database()
-        unpaid_loans = db.get_unpaid_loans_today()
+        try:
+            db.toggle_payment(
+                item.pret_id,
+                self.selected_date,
+                float(item.client_data["montant"]),
+                is_paid,
+            )
+            logger.info(f"Payment toggled for loan {item.pret_id}: {is_paid}")
+            self.refresh_total()
+        except Exception as e:
+            logger.error(f"Error toggling payment: {e}")
 
-        for loan in unpaid_loans:
-            try:
-                db.record_payment(loan["id"], loan["montant_journalier"])
-            except Exception as e:
-                logger.error(f"Erreur pour prêt {loan['id']}: {e}")
-
-        self.refresh_loans()
-
-    def update_summary(self):
+    def refresh_total(self):
         db = get_database()
-        unpaid = db.get_unpaid_loans_today()
-        total_due = sum(loan["montant_journalier"] for loan in unpaid)
-        daily = db.get_daily_revenue()
-        weekly = db.get_weekly_revenue()
-
-        if hasattr(self.ids, "daily_label"):
-            self.ids.daily_label.text = f"Jour: {daily:.0f} CFA"
-        if hasattr(self.ids, "weekly_label"):
-            self.ids.weekly_label.text = f"Semaine: {weekly:.0f} CFA"
+        data = db.get_payments_by_date(self.selected_date)
+        day_total = 0
+        for client in data:
+            for lamp in client["lamps"]:
+                if lamp["is_paid"]:
+                    day_total += lamp["montant"]
+        self.ids.total_label.text = f"Total: {day_total:.0f} Ar"
 
 
 class LampManagerApp(MDApp):

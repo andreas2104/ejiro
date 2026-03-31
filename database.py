@@ -60,6 +60,8 @@ class DatabaseManager:
             columns = [row[1] for row in cursor.fetchall()]
             if "montant_journalier" not in columns:
                 cursor.execute("ALTER TABLE prets ADD COLUMN montant_journalier REAL")
+            if "date_fin" not in columns:
+                cursor.execute("ALTER TABLE prets ADD COLUMN date_fin TEXT")
             conn.commit()
             logger.info("Database tables initialized")
 
@@ -240,7 +242,8 @@ class DatabaseManager:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "UPDATE prets SET statut = 'terminé' WHERE id = ?", (pret_id,)
+                "UPDATE prets SET statut = 'terminé', date_fin = ? WHERE id = ?",
+                (datetime.now().isoformat(), pret_id),
             )
             cursor.execute("SELECT lampe_id FROM prets WHERE id = ?", (pret_id,))
             row = cursor.fetchone()
@@ -326,6 +329,24 @@ class DatabaseManager:
             logger.info(f"Payment recorded: {montant} for loan {pret_id}")
             return cursor.lastrowid
 
+    def get_clients_count(self) -> int:
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM clients")
+            return cursor.fetchone()[0]
+
+    def get_lamps_count(self) -> int:
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM lamps")
+            return cursor.fetchone()[0]
+
+    def get_active_loans_count(self) -> int:
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT COUNT(*) FROM prets WHERE statut = 'actif'")
+            return cursor.fetchone()[0]
+
     def get_daily_revenue(self) -> float:
         today = datetime.now().date().isoformat()
         with sqlite3.connect(self.db_path) as conn:
@@ -402,3 +423,105 @@ class DatabaseManager:
                 }
                 for r in rows
             ]
+
+    def get_payments_by_date(self, date_str: str) -> List[Dict[str, Any]]:
+        # date_str expected as 'YYYY-MM-DD'
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            # Fetch clients who had active loans on that date
+            # date_debut <= date_str AND (statut == 'actif' OR date_fin >= date_str)
+            # Actually, to be safe with isoformat: date_debut <= date_str + "T23:59:59"
+            cursor.execute(
+                """
+                SELECT c.id, c.nom, c.telephone, c.adresse
+                FROM clients c
+                JOIN prets p ON c.id = p.client_id
+                WHERE p.date_debut <= ?
+                AND (p.statut = 'actif' OR p.date_fin >= ?)
+                GROUP BY c.id
+            """,
+                (f"{date_str}T23:59:59", f"{date_str}"),
+            )
+            client_rows = cursor.fetchall()
+            logger.info(f"Found {len(client_rows)} clients for date {date_str}")
+
+            result = []
+            for cr in client_rows:
+                client_id = cr[0]
+                # Fetch all relevant loans for this client on that date
+                cursor.execute(
+                    """
+                    SELECT p.id, l.numero, p.montant_journalier
+                    FROM prets p
+                    JOIN lamps l ON p.lampe_id = l.id
+                    WHERE p.client_id = ?
+                    AND p.date_debut <= ?
+                    AND (p.statut = 'actif' OR p.date_fin >= ?)
+                """,
+                    (client_id, f"{date_str}T23:59:59", f"{date_str}"),
+                )
+                loan_rows = cursor.fetchall()
+
+                loans = []
+                for lr in loan_rows:
+                    pret_id = lr[0]
+                    # Check if paid on that date
+                    cursor.execute(
+                        "SELECT id FROM transactions WHERE pret_id = ? AND date_paiement LIKE ?",
+                        (pret_id, f"{date_str}%"),
+                    )
+                    transaction = cursor.fetchone()
+                    loans.append(
+                        {
+                            "pret_id": pret_id,
+                            "numero": lr[1],
+                            "montant": lr[2],
+                            "is_paid": transaction is not None,
+                        }
+                    )
+
+                total_journalier = sum(l["montant"] for l in loans)
+                is_all_paid = all(l["is_paid"] for l in loans)
+
+                result.append(
+                    {
+                        "client_id": client_id,
+                        "client_nom": cr[1],
+                        "client_telephone": cr[2],
+                        "client_adresse": cr[3],
+                        "lamps": loans,
+                        "total_journalier": total_journalier,
+                        "is_paid": is_all_paid,
+                    }
+                )
+            return result
+
+    def toggle_payment(
+        self, pret_id: int, date_str: str, amount: float, is_paid: bool
+    ) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            if is_paid:
+                # Add transaction if not exists
+                cursor.execute(
+                    "SELECT id FROM transactions WHERE pret_id = ? AND date_paiement LIKE ?",
+                    (pret_id, f"{date_str}%"),
+                )
+                if not cursor.fetchone():
+                    # If it's a past date, record it with that date
+                    date_paiement = f"{date_str} {datetime.now().time().isoformat()}"
+                    cursor.execute(
+                        "INSERT INTO transactions (pret_id, date_paiement, montant, type) VALUES (?, ?, ?, ?)",
+                        (pret_id, date_paiement, amount, "journalier"),
+                    )
+            else:
+                # Remove transaction
+                cursor.execute(
+                    "DELETE FROM transactions WHERE pret_id = ? AND date_paiement LIKE ?",
+                    (pret_id, f"{date_str}%"),
+                )
+            conn.commit()
+
+    def get_unpaid_clients_today(self) -> List[Dict[str, Any]]:
+        # This method can be redirected to get_payments_by_date for consistency
+        return [c for c in self.get_payments_by_date(datetime.now().date().isoformat()) if not c["is_paid"]]
