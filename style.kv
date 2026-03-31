@@ -3,30 +3,52 @@
     HeaderBar:
         size_hint_y: None
         height: "50dp"
+        MDIconButton:
+            icon: "menu"
+            on_press: app.root.toggle_nav_drawer()
         MDLabel:
             text: "e-Jiro"
             halign: "left"
-            padding: "16dp", 0
             font_style: "H5"
             text_color: 1, 1, 1, 1
-        BoxLayout:
-            size_hint_x: None
-            width: "140dp"
-            spacing: "8dp"
-            padding: "8dp", "8dp"
-            MDFlatButton:
-                text: "Actualiser"
-                on_press: root.reload_app()
-            MDFlatButton:
-                text: "Quitter"
-                on_press: root.exit_app()
-    ScreenManager:
-        id: screen_manager
-        DashboardScreen:
-        ClientsScreen:
-        InventoryScreen:
-        LoanScreen:
-        PaymentScreen:
+    MDNavigationLayout:
+        ScreenManager:
+            id: screen_manager
+            DashboardScreen:
+            ClientsScreen:
+            InventoryScreen:
+            LoanScreen:
+            PaymentScreen:
+        MDNavigationDrawer:
+            id: nav_drawer
+            BoxLayout:
+                orientation: "vertical"
+                padding: "16dp"
+                spacing: "16dp"
+                MDLabel:
+                    text: "Menu"
+                    font_style: "H5"
+                    size_hint_y: None
+                    height: "40dp"
+                MDFlatButton:
+                    text: "Tableau de Bord"
+                    on_press: app.root.ids.screen_manager.current = "dashboard"; app.root.ids.nav_drawer.set_state("close")
+                MDFlatButton:
+                    text: "Clients"
+                    on_press: app.root.ids.screen_manager.current = "clients"; app.root.ids.nav_drawer.set_state("close")
+                MDFlatButton:
+                    text: "Lampes"
+                    on_press: app.root.ids.screen_manager.current = "inventory"; app.root.ids.nav_drawer.set_state("close")
+                MDFlatButton:
+                    text: "Prêts"
+                    on_press: app.root.ids.screen_manager.current = "loan"; app.root.ids.nav_drawer.set_state("close")
+                MDFlatButton:
+                    text: "Paiements"
+                    on_press: app.root.ids.screen_manager.current = "payment"; app.root.ids.nav_drawer.set_state("close")
+                Widget:
+                MDFlatButton:
+                    text: "Quitter"
+                    on_press: root.exit_app()
 
 <HeaderBar>:
     orientation: "horizontal"
@@ -307,26 +329,31 @@
         size_hint_x: 1
         MDLabel:
             text: root.client_nom
-            size_hint_x: 0.3
+            size_hint_x: 0.35
             halign: "center"
             font_size: "16sp"
             shorten: True
             shorten_from: "right"
         MDLabel:
             text: root.lampe_numero
-            size_hint_x: 0.3
+            size_hint_x: 0.25
             halign: "center"
             font_size: "16sp"
         MDLabel:
-            text: root.date_debut
+            text: root.montant_journalier + " CFA"
             size_hint_x: 0.2
             halign: "center"
-            font_size: "14sp"
-        MDLabel:
-            text: root.statut
+            font_size: "16sp"
+        CheckBox:
+            id: paid_checkbox
             size_hint_x: 0.2
-            halign: "center"
-            font_size: "14sp"
+            active: root.is_paid
+            on_active: root.dispatch("on_paid_toggle", self.active)
+            canvas.before:
+                Color:
+                    rgba: 0.3, 0.3, 0.3, 1
+                Line:
+                    rectangle: self.x, self.y, self.width, self.height
 
 <TransactionListItem>:
     size_hint_y: None
@@ -429,15 +456,22 @@
             Spinner:
                 id: client_spinner
                 text: "Client"
-                size_hint_x: 0.3
+                size_hint_x: 0.25
             Spinner:
                 id: lampe_spinner
                 text: "Lampe"
-                size_hint_x: 0.3
+                size_hint_x: 0.25
+            TextInput:
+                id: montant_input
+                hint_text: "Prix/jour"
+                multiline: False
+                input_filter: "float"
+                size_hint_x: 0.25
+                foreground_color: 0, 0, 0, 1
             MDRaisedButton:
                 text: "Créer"
-                size_hint_x: 0.4
-                on_press: root.assign_lampe(client_spinner.text, lampe_spinner.text)
+                size_hint_x: 0.25
+                on_press: root.assign_lampe(client_spinner.text, lampe_spinner.text, montant_input.text)
         GridLayout:
             cols: 3
             spacing: "8dp"
@@ -500,51 +534,39 @@
                 text: "Client"
                 bold: True
                 halign: "center"
-                size_hint_x: 0.3
+                size_hint_x: 0.35
             MDLabel:
                 text: "Lampe"
                 bold: True
                 halign: "center"
-                size_hint_x: 0.3
+                size_hint_x: 0.25
             MDLabel:
-                text: "Date"
+                text: "Prix/Jour"
                 bold: True
                 halign: "center"
                 size_hint_x: 0.2
             MDLabel:
-                text: "Montant"
+                text: "Payé"
                 bold: True
                 halign: "center"
                 size_hint_x: 0.2
         ScrollView:
             size_hint_y: 1
             GridLayout:
-                id: transactions_list
+                id: loans_list
                 cols: 1
                 size_hint_y: None
                 height: self.minimum_height
                 spacing: 0
                 padding: 0
-        GridLayout:
-            cols: 3
+        BoxLayout:
+            orientation: "horizontal"
             size_hint_y: None
-            height: "45dp"
+            height: "40dp"
             padding: "8dp"
-            spacing: "8dp"
-            Spinner:
-                id: loan_spinner
-                text: "Prêt"
-                size_hint_x: 0.4
-            TextInput:
-                id: montant_input
-                hint_text: "Montant"
-                multiline: False
-                input_filter: "float"
-                size_hint_x: 0.3
             MDRaisedButton:
-                text: "Enregistrer"
-                size_hint_x: 0.3
-                on_press: root.record_payment(loan_spinner.text, float(montant_input.text or 0))
+                text: "Tout Marquer Payé"
+                on_press: root.mark_all_paid()
         MDFlatButton:
             text: "Retour"
             font_size: "16sp"

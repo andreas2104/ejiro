@@ -1,8 +1,9 @@
 import logging
+from datetime import datetime
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.lang import Builder
-from kivy.properties import StringProperty
+from kivy.properties import StringProperty, BooleanProperty
 from kivy.metrics import sp
 from kivy.uix.popup import Popup
 from kivy.uix.boxlayout import BoxLayout
@@ -31,6 +32,13 @@ class RootWidget(BoxLayout):
 
     def exit_app(self):
         App.get_running_app().stop()
+
+    def toggle_nav_drawer(self):
+        drawer = self.ids.nav_drawer
+        if drawer.state == "open":
+            drawer.set_state("close")
+        else:
+            drawer.set_state("open")
 
 
 def get_sp(size_name: str) -> int:
@@ -65,9 +73,17 @@ class LampListItem(ButtonBehavior, BoxLayout):
 class LoanListItem(ButtonBehavior, BoxLayout):
     client_nom = StringProperty()
     lampe_numero = StringProperty()
-    date_debut = StringProperty()
-    statut = StringProperty()
+    montant_journalier = StringProperty()
+    is_paid = BooleanProperty(False)
     loan_id = None
+    loan_data = None
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.register_event_type("on_paid_toggle")
+
+    def on_paid_toggle(self, *args):
+        pass
 
 
 class TransactionListItem(ButtonBehavior, BoxLayout):
@@ -387,7 +403,7 @@ class InventoryScreen(MDScreen):
 
     def refresh_inventory(self):
         db = get_database()
-        lamps = db.get_all_lampes()
+        lamps = db.get_all_lamps()
         self.ids.inventory_list.clear_widgets()
         for lamp in lamps:
             item = LampListItem(
@@ -474,7 +490,7 @@ class LoanScreen(MDScreen):
         clients = db.get_all_clients()
         self.ids.client_spinner.values = [c["nom"] for c in clients]
         available_lamps = [
-            lamp for lamp in db.get_all_lampes() if lamp["etat"] == "disponible"
+            lamp for lamp in db.get_all_lamps() if lamp["etat"] == "disponible"
         ]
         self.ids.lampe_spinner.values = [lamp["numero"] for lamp in available_lamps]
 
@@ -498,7 +514,17 @@ class LoanScreen(MDScreen):
         self.selected_loan_id = loan_id
         logger.info(f"Prêt sélectionné: {loan_id}")
 
-    def assign_lampe(self, client_nom: str, lampe_numero: str):
+    def assign_lampe(self, client_nom: str, lampe_numero: str, montant_text: str):
+        try:
+            montant_journalier = float(montant_text) if montant_text else 0
+        except ValueError:
+            logger.warning("Montant invalide")
+            return
+
+        if montant_journalier <= 0:
+            logger.warning("Le montant doit être positif")
+            return
+
         db = get_database()
         clients = db.get_all_clients()
         client = next((c for c in clients if c["nom"] == client_nom), None)
@@ -507,7 +533,7 @@ class LoanScreen(MDScreen):
             return
 
         lampe = next(
-            (lamp for lamp in db.get_all_lampes() if lamp["numero"] == lampe_numero),
+            (lamp for lamp in db.get_all_lamps() if lamp["numero"] == lampe_numero),
             None,
         )
         if not lampe:
@@ -515,8 +541,8 @@ class LoanScreen(MDScreen):
             return
 
         try:
-            db.assign_lampe_to_client(client["id"], lampe["id"])
-            logger.info("Prêt créé")
+            db.assign_lamps_to_client(client["id"], lampe["id"], montant_journalier)
+            logger.info(f"Prêt créé: {montant_journalier}/jour")
             self.refresh_loans()
             self.load_data()
         except Exception as e:
@@ -605,65 +631,64 @@ class LoanScreen(MDScreen):
 
 class PaymentScreen(MDScreen):
     def on_enter(self):
-        Clock.schedule_once(lambda dt: self.load_loans())
-        Clock.schedule_once(lambda dt: self.refresh_transactions())
+        Clock.schedule_once(lambda dt: self.refresh_loans())
 
-    def load_loans(self):
+    def refresh_loans(self):
         db = get_database()
-        active_loans = db.get_active_loans()
-        self.ids.loan_spinner.values = [
-            f"{loan['client_nom']} - Lampe {loan['lampe_numero']}"
-            for loan in active_loans
-        ]
+        unpaid_loans = db.get_unpaid_loans_today()
+        self.ids.loans_list.clear_widgets()
 
-    def refresh_transactions(self):
-        db = get_database()
-        transactions = db.get_all_transactions()
-        self.ids.transactions_list.clear_widgets()
-        for t in transactions:
-            item = TransactionListItem(
-                client_nom=t["client_nom"],
-                lampe_numero=t["lampe_numero"],
-                date_paiement=t["date_paiement"][:10],
-                montant=f"{t['montant']:.2f}",
+        today = datetime.now().date().isoformat()
+
+        for loan in unpaid_loans:
+            item = LoanListItem(
+                client_nom=loan["client_nom"],
+                lampe_numero=loan["lamps_numero"],
+                montant_journalier=f"{loan['montant_journalier']:.0f}",
+                is_paid=False,
             )
-            item.transaction_id = t["id"]
-            self.ids.transactions_list.add_widget(item)
-        self.update_totals()
+            item.loan_id = loan["id"]
+            item.loan_data = loan
+            item.bind(on_paid_toggle=self.on_loan_paid_toggle)
+            self.ids.loans_list.add_widget(item)
 
-    def update_totals(self):
+        self.update_summary()
+
+    def on_loan_paid_toggle(self, instance, value):
+        if value and instance.loan_data:
+            db = get_database()
+            try:
+                db.record_payment(
+                    instance.loan_id, instance.loan_data["montant_journalier"]
+                )
+                logger.info(f"Paiement enregistré pour prêt {instance.loan_id}")
+                self.refresh_loans()
+            except Exception as e:
+                logger.error(f"Erreur: {e}")
+
+    def mark_all_paid(self):
         db = get_database()
+        unpaid_loans = db.get_unpaid_loans_today()
+
+        for loan in unpaid_loans:
+            try:
+                db.record_payment(loan["id"], loan["montant_journalier"])
+            except Exception as e:
+                logger.error(f"Erreur pour prêt {loan['id']}: {e}")
+
+        self.refresh_loans()
+
+    def update_summary(self):
+        db = get_database()
+        unpaid = db.get_unpaid_loans_today()
+        total_due = sum(loan["montant_journalier"] for loan in unpaid)
         daily = db.get_daily_revenue()
         weekly = db.get_weekly_revenue()
-        self.ids.daily_label.text = f"Jour: {daily:.2f} CFA"
-        self.ids.weekly_label.text = f"Semaine: {weekly:.2f} CFA"
 
-    def record_payment(self, loan_info: str, montant: float):
-        if montant <= 0:
-            logger.warning("Montant invalide")
-            return
-
-        db = get_database()
-        active_loans = db.get_active_loans()
-        loan = next(
-            (
-                loan_item
-                for loan_item in active_loans
-                if f"{loan_item['client_nom']} - Lampe {loan_item['lampe_numero']}"
-                == loan_info
-            ),
-            None,
-        )
-        if not loan:
-            logger.warning("Prêt non trouvé")
-            return
-
-        try:
-            db.record_payment(loan["id"], montant)
-            logger.info("Paiement enregistré")
-            self.refresh_transactions()
-        except Exception as e:
-            logger.error(f"Erreur: {e}")
+        if hasattr(self.ids, "daily_label"):
+            self.ids.daily_label.text = f"Jour: {daily:.0f} CFA"
+        if hasattr(self.ids, "weekly_label"):
+            self.ids.weekly_label.text = f"Semaine: {weekly:.0f} CFA"
 
 
 class LampManagerApp(MDApp):

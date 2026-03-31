@@ -39,10 +39,11 @@ class DatabaseManager:
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
                     client_id INTEGER NOT NULL,
                     lampe_id INTEGER NOT NULL,
+                    montant_journalier REAL NOT NULL,
                     date_debut TEXT NOT NULL,
                     statut TEXT CHECK(statut IN ('actif', 'terminé')) DEFAULT 'actif',
                     FOREIGN KEY (client_id) REFERENCES clients(id),
-                    FOREIGN KEY (lampe_id) REFERENCES lampes(id)
+                    FOREIGN KEY (lampe_id) REFERENCES lamps(id)
                 )
             """)
             cursor.execute("""
@@ -55,6 +56,10 @@ class DatabaseManager:
                     FOREIGN KEY (pret_id) REFERENCES prets(id)
                 )
             """)
+            cursor.execute("PRAGMA table_info(prets)")
+            columns = [row[1] for row in cursor.fetchall()]
+            if "montant_journalier" not in columns:
+                cursor.execute("ALTER TABLE prets ADD COLUMN montant_journalier REAL")
             conn.commit()
             logger.info("Database tables initialized")
 
@@ -129,12 +134,12 @@ class DatabaseManager:
             conn.commit()
             logger.info(f"Client {client_id} deleted")
 
-    def add_lampe(self, numero: str, etat: str = "disponible") -> int:
+    def add_lamps(self, numero: str, etat: str = "disponible") -> int:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             try:
                 cursor.execute(
-                    "INSERT INTO lampes (numero, etat) VALUES (?, ?)", (numero, etat)
+                    "INSERT INTO lamps (numero, etat) VALUES (?, ?)", (numero, etat)
                 )
                 conn.commit()
                 logger.info(f"Lamp added: {numero}")
@@ -143,18 +148,18 @@ class DatabaseManager:
                 logger.error(f"Error adding lamp: {e}")
                 raise
 
-    def get_all_lampes(self) -> List[Dict[str, Any]]:
+    def get_all_lamps(self) -> List[Dict[str, Any]]:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT id, numero, etat FROM lampes")
+            cursor.execute("SELECT id, numero, etat FROM lamps")
             rows = cursor.fetchall()
             return [{"id": r[0], "numero": r[1], "etat": r[2]} for r in rows]
 
-    def get_lampe_by_numero(self, numero: str) -> Optional[Dict[str, Any]]:
+    def get_lamps_by_numero(self, numero: str) -> Optional[Dict[str, Any]]:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT id, numero, etat FROM lampes WHERE numero = ?", (numero,)
+                "SELECT id, numero, etat FROM lamps WHERE numero = ?", (numero,)
             )
             row = cursor.fetchone()
             if row:
@@ -165,7 +170,7 @@ class DatabaseManager:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "SELECT id, numero, etat FROM lampes WHERE id = ?",
+                "SELECT id, numero, etat FROM lamps WHERE id = ?",
                 (lamp_id,),
             )
             row = cursor.fetchone()
@@ -177,7 +182,7 @@ class DatabaseManager:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute(
-                "UPDATE lampes SET numero = ?, etat = ? WHERE id = ?",
+                "UPDATE lamps SET numero = ?, etat = ? WHERE id = ?",
                 (numero, etat, lamp_id),
             )
             conn.commit()
@@ -188,7 +193,7 @@ class DatabaseManager:
             cursor = conn.cursor()
             try:
                 cursor.execute(
-                    "INSERT INTO lampes (numero, etat) VALUES (?, ?)", (numero, etat)
+                    "INSERT INTO lamps (numero, etat) VALUES (?, ?)", (numero, etat)
                 )
                 conn.commit()
                 logger.info(f"Lamp added: {numero}")
@@ -200,25 +205,35 @@ class DatabaseManager:
     def delete_lamp(self, lamp_id: int) -> None:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute("DELETE FROM lampes WHERE id = ?", (lamp_id,))
+            cursor.execute("DELETE FROM lamps WHERE id = ?", (lamp_id,))
             conn.commit()
             logger.info(f"Lamp {lamp_id} deleted")
 
-    def assign_lampe_to_client(self, client_id: int, lampe_id: int) -> int:
+    def assign_lamps_to_client(
+        self, client_id: int, lampe_id: int, montant_journalier: float
+    ) -> int:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
-            cursor.execute("SELECT etat FROM lampes WHERE id = ?", (lampe_id,))
+            cursor.execute("SELECT etat FROM lamps WHERE id = ?", (lampe_id,))
             row = cursor.fetchone()
             if not row or row[0] != "disponible":
                 raise ValueError(f"Lamp {lampe_id} is not available")
 
             cursor.execute(
-                "INSERT INTO prets (client_id, lampe_id, date_debut, statut) VALUES (?, ?, ?, ?)",
-                (client_id, lampe_id, datetime.now().isoformat(), "actif"),
+                "INSERT INTO prets (client_id, lampe_id, montant_journalier, date_debut, statut) VALUES (?, ?, ?, ?, ?)",
+                (
+                    client_id,
+                    lampe_id,
+                    montant_journalier,
+                    datetime.now().isoformat(),
+                    "actif",
+                ),
             )
-            cursor.execute("UPDATE lampes SET etat = 'louée' WHERE id = ?", (lampe_id,))
+            cursor.execute("UPDATE lamps SET etat = 'louée' WHERE id = ?", (lampe_id,))
             conn.commit()
-            logger.info(f"Lamp {lampe_id} assigned to client {client_id}")
+            logger.info(
+                f"Lamp {lampe_id} assigned to client {client_id} for {montant_journalier}/day"
+            )
             return cursor.lastrowid
 
     def close_loan(self, pret_id: int) -> None:
@@ -231,7 +246,7 @@ class DatabaseManager:
             row = cursor.fetchone()
             if row:
                 cursor.execute(
-                    "UPDATE lampes SET etat = 'disponible' WHERE id = ?", (row[0],)
+                    "UPDATE lamps SET etat = 'disponible' WHERE id = ?", (row[0],)
                 )
             conn.commit()
             logger.info(f"Loan {pret_id} closed")
@@ -243,7 +258,7 @@ class DatabaseManager:
             row = cursor.fetchone()
             if row:
                 cursor.execute(
-                    "UPDATE lampes SET etat = 'disponible' WHERE id = ?", (row[0],)
+                    "UPDATE lamps SET etat = 'disponible' WHERE id = ?", (row[0],)
                 )
             cursor.execute("DELETE FROM prets WHERE id = ?", (pret_id,))
             conn.commit()
@@ -253,10 +268,10 @@ class DatabaseManager:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT p.id, c.nom, l.numero, p.date_debut, p.statut
+                SELECT p.id, c.nom, l.numero, p.montant_journalier, p.date_debut, p.statut
                 FROM prets p
                 JOIN clients c ON p.client_id = c.id
-                JOIN lampeS l ON p.lampe_id = l.id
+                JOIN lamps l ON p.lampe_id = l.id
                 ORDER BY p.id DESC
             """)
             rows = cursor.fetchall()
@@ -264,9 +279,10 @@ class DatabaseManager:
                 {
                     "id": r[0],
                     "client_nom": r[1],
-                    "lampe_numero": r[2],
-                    "date_debut": r[3],
-                    "statut": r[4],
+                    "lamps_numero": r[2],
+                    "montant_journalier": r[3],
+                    "date_debut": r[4],
+                    "statut": r[5],
                 }
                 for r in rows
             ]
@@ -275,10 +291,10 @@ class DatabaseManager:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT p.id, c.nom, l.numero, p.date_debut
+                SELECT p.id, c.nom, l.numero, p.montant_journalier, p.date_debut
                 FROM prets p
                 JOIN clients c ON p.client_id = c.id
-                JOIN lampeS l ON p.lampe_id = l.id
+                JOIN lamps l ON p.lampe_id = l.id
                 WHERE p.statut = 'actif'
             """)
             rows = cursor.fetchall()
@@ -286,8 +302,9 @@ class DatabaseManager:
                 {
                     "id": r[0],
                     "client_nom": r[1],
-                    "lampe_numero": r[2],
-                    "date_debut": r[3],
+                    "lamps_numero": r[2],
+                    "montant_journalier": r[3],
+                    "date_debut": r[4],
                 }
                 for r in rows
             ]
@@ -341,7 +358,7 @@ class DatabaseManager:
                 FROM transactions t
                 JOIN prets p ON t.pret_id = p.id
                 JOIN clients c ON p.client_id = c.id
-                JOIN lampeS l ON p.lampe_id = l.id
+                JOIN lamps l ON p.lampe_id = l.id
                 ORDER BY t.date_paiement DESC
             """)
             rows = cursor.fetchall()
@@ -349,10 +366,39 @@ class DatabaseManager:
                 {
                     "id": r[0],
                     "client_nom": r[1],
-                    "lampe_numero": r[2],
+                    "lamps_numero": r[2],
                     "date_paiement": r[3],
                     "montant": r[4],
                     "type": r[5],
+                }
+                for r in rows
+            ]
+
+    def get_unpaid_loans_today(self) -> List[Dict[str, Any]]:
+        today = datetime.now().date().isoformat()
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                """
+                SELECT p.id, c.nom, l.numero, p.montant_journalier
+                FROM prets p
+                JOIN clients c ON p.client_id = c.id
+                JOIN lamps l ON p.lampe_id = l.id
+                WHERE p.statut = 'actif'
+                AND p.id NOT IN (
+                    SELECT pret_id FROM transactions 
+                    WHERE date_paiement LIKE ?
+                )
+            """,
+                (f"{today}%",),
+            )
+            rows = cursor.fetchall()
+            return [
+                {
+                    "id": r[0],
+                    "client_nom": r[1],
+                    "lamps_numero": r[2],
+                    "montant_journalier": r[3],
                 }
                 for r in rows
             ]
