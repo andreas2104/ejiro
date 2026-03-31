@@ -27,6 +27,7 @@
         InventoryScreen:
         LoanScreen:
         PaymentScreen:
+        HistoryScreen:
 
 <HeaderBar>:
     orientation: "horizontal"
@@ -122,6 +123,10 @@
                 text: "Paiement"
                 font_size: "18sp"
                 on_press: app.root.ids.screen_manager.current = "payment"
+            MDFlatButton:
+                text: "Historique"
+                font_size: "18sp"
+                on_press: app.root.ids.screen_manager.current = "history"
         Widget:
 
 <ClientsScreen>:
@@ -363,10 +368,55 @@
             halign: "center"
             font_size: "14sp"
         MDLabel:
-            text: root.montant
+            text: root.montant + " AR"
             size_hint_x: 0.2
             halign: "center"
             font_size: "14sp"
+
+<DailyPaymentListItem>:
+    size_hint_y: None
+    height: "50dp"
+    padding: "8dp"
+    canvas.before:
+        Color:
+            rgba: 0.9, 0.9, 0.9, 1
+        Rectangle:
+            pos: self.pos
+            size: self.size
+        Color:
+            rgba: 0.7, 0.7, 0.7, 1
+        Line:
+            points: self.x, self.y, self.x + self.width, self.y
+    BoxLayout:
+        orientation: "horizontal"
+        size_hint_x: 1
+        MDLabel:
+            text: root.client_nom
+            size_hint_x: 0.35
+            halign: "center"
+            font_size: "14sp"
+            shorten: True
+            shorten_from: "right"
+        MDLabel:
+            text: root.lampe_numero
+            size_hint_x: 0.25
+            halign: "center"
+            font_size: "14sp"
+        MDLabel:
+            text: root.montant_journalier + " AR"
+            size_hint_x: 0.2
+            halign: "center"
+            font_size: "14sp"
+        CheckBox:
+            id: paid_checkbox
+            size_hint_x: 0.2
+            active: root.is_paid
+            on_active: root.dispatch("on_checkbox_active", self.active)
+            canvas.before:
+                Color:
+                    rgba: 0.3, 0.3, 0.3, 1
+                Line:
+                    rectangle: self.x, self.y, self.width, self.height
 
 <LoanScreen>:
     name: "loan"
@@ -421,7 +471,7 @@
                 spacing: 0
                 padding: 0
         GridLayout:
-            cols: 3
+            cols: 4
             size_hint_y: None
             height: "45dp"
             padding: "8dp"
@@ -429,15 +479,21 @@
             Spinner:
                 id: client_spinner
                 text: "Client"
-                size_hint_x: 0.3
+                size_hint_x: 0.25
             Spinner:
                 id: lampe_spinner
                 text: "Lampe"
-                size_hint_x: 0.3
+                size_hint_x: 0.25
+            TextInput:
+                id: montant_input
+                hint_text: "Montant/jour"
+                multiline: False
+                input_filter: "float"
+                size_hint_x: 0.25
             MDRaisedButton:
                 text: "Créer"
-                size_hint_x: 0.4
-                on_press: root.assign_lampe(client_spinner.text, lampe_spinner.text)
+                size_hint_x: 0.25
+                on_press: root.assign_lampe(client_spinner.text, lampe_spinner.text, float(montant_input.text or 0))
         GridLayout:
             cols: 3
             spacing: "8dp"
@@ -469,7 +525,22 @@
             halign: "center"
             font_style: "H4"
             size_hint_y: None
+            height: "50dp"
+        BoxLayout:
+            orientation: "horizontal"
+            size_hint_y: None
             height: "40dp"
+            padding: "8dp"
+            MDLabel:
+                text: "Paiements du jour"
+                halign: "center"
+                font_style: "H5"
+                size_hint_y: None
+                height: "40dp"
+            MDRaisedButton:
+                text: "Aujourd'hui"
+                size_hint_x: 0.5
+                on_press: root.load_today_payments()
         GridLayout:
             cols: 2
             size_hint_y: None
@@ -477,18 +548,154 @@
             padding: "16dp", "4dp"
             MDLabel:
                 id: daily_label
-                text: "Jour: 0.00 CFA"
+                text: "Jour: 0.00 AR"
                 halign: "center"
                 font_style: "H6"
             MDLabel:
                 id: weekly_label
-                text: "Semaine: 0.00 CFA"
+                text: "Semaine: 0.00 AR"
                 halign: "center"
                 font_style: "H6"
+        MDLabel:
+            id: current_date_label
+            text: "Sélectionnez une date"
+            halign: "center"
+            font_style: "H6"
+            size_hint_y: None
+            height: "30dp"
         GridLayout:
             cols: 4
             size_hint_y: None
-            height: "45dp"
+            height: "35dp"
+            padding: 0, 0
+            canvas.before:
+                Color:
+                    rgba: 0.85, 0.85, 0.85, 1
+                Rectangle:
+                    pos: self.pos
+                    size: self.size
+            MDLabel:
+                text: "Client"
+                bold: True
+                halign: "center"
+                size_hint_x: 0.35
+            MDLabel:
+                text: "Lampe"
+                bold: True
+                halign: "center"
+                size_hint_x: 0.25
+            MDLabel:
+                text: "Montant"
+                bold: True
+                halign: "center"
+                size_hint_x: 0.2
+            MDLabel:
+                text: "Payé"
+                bold: True
+                halign: "center"
+                size_hint_x: 0.2
+        ScrollView:
+            size_hint_y: 0.4
+            GridLayout:
+                id: daily_payments_list
+                cols: 1
+                size_hint_y: None
+                height: self.minimum_height
+                spacing: 0
+                padding: 0
+        BoxLayout:
+            orientation: "horizontal"
+            size_hint_y: None
+            height: "40dp"
+            padding: "16dp", "8dp"
+            MDRaisedButton:
+                text: "Tout sélectionner"
+                size_hint_x: 0.45
+                on_press: root.select_all_payments()
+            MDRaisedButton:
+                text: "Sauvegarder"
+                size_hint_x: 0.45
+                on_press: root.save_payments()
+        MDFlatButton:
+            text: "Retour au Tableau de Bord"
+            on_press: app.root.ids.screen_manager.current = "dashboard"
+
+
+<HistoryScreen>:
+    name: "history"
+    BoxLayout:
+        orientation: "vertical"
+        padding: 0
+        spacing: 0
+        MDLabel:
+            text: "Historique"
+            halign: "center"
+            font_style: "H4"
+            size_hint_y: None
+            height: "40dp"
+        GridLayout:
+            cols: 3
+            size_hint_y: None
+            height: "40dp"
+            padding: "16dp", "4dp"
+            MDLabel:
+                id: daily_label
+                text: "Aujourd'hui: 0.00 AR"
+                halign: "center"
+                font_style: "H6"
+            MDLabel:
+                id: weekly_label
+                text: "Semaine: 0.00 AR"
+                halign: "center"
+                font_style: "H6"
+            MDLabel:
+                id: monthly_label
+                text: "Mois: 0.00 AR"
+                halign: "center"
+                font_style: "H6"
+        BoxLayout:
+            orientation: "horizontal"
+            size_hint_y: None
+            height: "35dp"
+            padding: "8dp"
+            MDLabel:
+                id: current_date_label
+                text: "Historique"
+                halign: "center"
+                font_style: "H6"
+                size_hint_x: 0.5
+        BoxLayout:
+            orientation: "horizontal"
+            size_hint_y: None
+            height: "40dp"
+            padding: "8dp"
+            MDLabel:
+                text: "Date:"
+                size_hint_x: 0.1
+                halign: "left"
+                valign: "center"
+            MDTextField:
+                id: history_date_input
+                hint_text: "JJ/MM/AAAA"
+                size_hint_x: 0.25
+                input_filter: lambda text, from_undo: text if text.isdigit() or text == "/" else ""
+                write_tab: False
+            MDRaisedButton:
+                text: "Filtrer"
+                size_hint_x: 0.2
+                on_press: root.filter_transactions()
+            MDRaisedButton:
+                text: "Tout"
+                size_hint_x: 0.2
+                on_press: root.refresh_transactions()
+            MDRaisedButton:
+                text: "Aujourd'hui"
+                size_hint_x: 0.25
+                on_press: root.filter_today_transactions()
+        GridLayout:
+            cols: 4
+            size_hint_y: None
+            height: "35dp"
             padding: 0, 0
             canvas.before:
                 Color:
@@ -505,7 +712,7 @@
                 text: "Lampe"
                 bold: True
                 halign: "center"
-                size_hint_x: 0.3
+                size_hint_x: 0.2
             MDLabel:
                 text: "Date"
                 bold: True
@@ -525,26 +732,6 @@
                 height: self.minimum_height
                 spacing: 0
                 padding: 0
-        GridLayout:
-            cols: 3
-            size_hint_y: None
-            height: "45dp"
-            padding: "8dp"
-            spacing: "8dp"
-            Spinner:
-                id: loan_spinner
-                text: "Prêt"
-                size_hint_x: 0.4
-            TextInput:
-                id: montant_input
-                hint_text: "Montant"
-                multiline: False
-                input_filter: "float"
-                size_hint_x: 0.3
-            MDRaisedButton:
-                text: "Enregistrer"
-                size_hint_x: 0.3
-                on_press: root.record_payment(loan_spinner.text, float(montant_input.text or 0))
         MDFlatButton:
             text: "Retour"
             font_size: "16sp"

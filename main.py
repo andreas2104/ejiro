@@ -1,8 +1,9 @@
 import logging
+from datetime import date
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.lang import Builder
-from kivy.properties import StringProperty
+from kivy.properties import StringProperty, BooleanProperty
 from kivy.metrics import sp
 from kivy.uix.popup import Popup
 from kivy.uix.boxlayout import BoxLayout
@@ -31,6 +32,26 @@ class RootWidget(BoxLayout):
 
     def exit_app(self):
         App.get_running_app().stop()
+
+    def refresh_history(self):
+        logger.info("refresh_history called")
+        history_screen = self.ids.screen_manager.get_screen("history")
+        if hasattr(history_screen, "refresh_transactions"):
+            logger.info("Calling history refresh_transactions")
+            Clock.schedule_once(lambda dt: history_screen.refresh_transactions())
+            Clock.schedule_once(lambda dt: history_screen.update_totals())
+        else:
+            logger.warning("history screen has no refresh_transactions")
+
+    def force_refresh_history(self):
+        logger.info("force_refresh_history called")
+        try:
+            history_screen = self.ids.screen_manager.get_screen("history")
+            history_screen.refresh_transactions()
+            history_screen.update_totals()
+            logger.info("History refreshed successfully")
+        except Exception as e:
+            logger.error(f"Error force refreshing history: {e}")
 
 
 def get_sp(size_name: str) -> int:
@@ -76,6 +97,21 @@ class TransactionListItem(ButtonBehavior, BoxLayout):
     date_paiement = StringProperty()
     montant = StringProperty()
     transaction_id = None
+
+
+class DailyPaymentListItem(BoxLayout):
+    client_nom = StringProperty()
+    lampe_numero = StringProperty()
+    montant_journalier = StringProperty()
+    is_paid = BooleanProperty(False)
+    loan_id = None
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.register_event_type("on_checkbox_active")
+
+    def on_checkbox_active(self, *args):
+        pass
 
 
 class LampFormModal(Popup):
@@ -190,8 +226,8 @@ class DashboardScreen(MDScreen):
         db = get_database()
         daily = db.get_daily_revenue()
         weekly = db.get_weekly_revenue()
-        self.ids.daily_label.text = f"Journalier: {daily:.2f} CFA"
-        self.ids.weekly_label.text = f"Hebdomadaire: {weekly:.2f} CFA"
+        self.ids.daily_label.text = f"Journalier: {daily:.2f} AR"
+        self.ids.weekly_label.text = f"Hebdomadaire: {weekly:.2f} AR"
 
 
 class ClientFormModal(Popup):
@@ -387,7 +423,7 @@ class InventoryScreen(MDScreen):
 
     def refresh_inventory(self):
         db = get_database()
-        lamps = db.get_all_lampes()
+        lamps = db.get_all_lamps()
         self.ids.inventory_list.clear_widgets()
         for lamp in lamps:
             item = LampListItem(
@@ -474,7 +510,7 @@ class LoanScreen(MDScreen):
         clients = db.get_all_clients()
         self.ids.client_spinner.values = [c["nom"] for c in clients]
         available_lamps = [
-            lamp for lamp in db.get_all_lampes() if lamp["etat"] == "disponible"
+            lamp for lamp in db.get_all_lamps() if lamp["etat"] == "disponible"
         ]
         self.ids.lampe_spinner.values = [lamp["numero"] for lamp in available_lamps]
 
@@ -498,7 +534,9 @@ class LoanScreen(MDScreen):
         self.selected_loan_id = loan_id
         logger.info(f"Prêt sélectionné: {loan_id}")
 
-    def assign_lampe(self, client_nom: str, lampe_numero: str):
+    def assign_lampe(
+        self, client_nom: str, lampe_numero: str, montant_journalier: float
+    ):
         db = get_database()
         clients = db.get_all_clients()
         client = next((c for c in clients if c["nom"] == client_nom), None)
@@ -507,7 +545,7 @@ class LoanScreen(MDScreen):
             return
 
         lampe = next(
-            (lamp for lamp in db.get_all_lampes() if lamp["numero"] == lampe_numero),
+            (lamp for lamp in db.get_all_lamps() if lamp["numero"] == lampe_numero),
             None,
         )
         if not lampe:
@@ -515,7 +553,7 @@ class LoanScreen(MDScreen):
             return
 
         try:
-            db.assign_lampe_to_client(client["id"], lampe["id"])
+            db.assign_lampe_to_client(client["id"], lampe["id"], montant_journalier)
             logger.info("Prêt créé")
             self.refresh_loans()
             self.load_data()
@@ -605,26 +643,253 @@ class LoanScreen(MDScreen):
 
 class PaymentScreen(MDScreen):
     def on_enter(self):
-        Clock.schedule_once(lambda dt: self.load_loans())
-        Clock.schedule_once(lambda dt: self.refresh_transactions())
+        self.current_payment_date = date.today().isoformat()
+        self.pending_payments = []
+        self.ids.current_date_label.text = (
+            f"Paiements du {date.today().strftime('%d/%m/%Y')}"
+        )
+        self.refresh_daily_payments()
 
-    def load_loans(self):
+    def load_today_payments(self):
+        self.current_payment_date = date.today().isoformat()
+        self.ids.current_date_label.text = (
+            f"Paiements du {date.today().strftime('%d/%m/%Y')}"
+        )
+        self.refresh_daily_payments()
+
+    def go_back(self):
+        from kivy.app import App
+
+        app = App.get_running_app()
+        root = app.root
+        if hasattr(root, "ids") and hasattr(root.ids, "screen_manager"):
+            root.ids.screen_manager.current = "dashboard"
+
+    def get_current_date(self):
+        from datetime import date
+
+        return date.today().strftime("%d/%m/%Y")
+
+    def load_today_payments(self):
+        from datetime import date
+
+        self.load_payments_for_date()
+
+    def load_payments_for_date(self):
+        from datetime import date
+
+        self.current_payment_date = date.today().isoformat()
+        self.ids.current_date_label.text = (
+            f"Paiements du {date.today().strftime('%d/%m/%Y')}"
+        )
+        self.refresh_daily_payments()
+
+    def refresh_daily_payments(self):
+        if not self.current_payment_date:
+            return
+
+        try:
+            db = get_database()
+            active_loans = db.get_active_loans()
+
+            if not hasattr(self, "ids") or not hasattr(self.ids, "daily_payments_list"):
+                logger.warning("daily_payments_list not accessible")
+                return
+
+            self.ids.daily_payments_list.clear_widgets()
+            self.pending_payments = []
+
+            for loan in active_loans:
+                item = DailyPaymentListItem(
+                    client_nom=loan["client_nom"],
+                    lampe_numero=loan["lampe_numero"],
+                    montant_journalier=f"{loan['montant_journalier']:.2f}",
+                    is_paid=False,
+                )
+                item.loan_id = loan["id"]
+                item.montant_journalier_value = loan["montant_journalier"]
+                item.bind(on_checkbox_active=self.on_payment_toggle)
+                self.ids.daily_payments_list.add_widget(item)
+
+            self.update_totals()
+        except Exception as e:
+            logger.error(f"Erreur dans refresh_daily_payments: {e}")
+
+    def on_payment_toggle(self, instance, value):
+        loan_id = instance.loan_id
+
+        if value and loan_id not in self.pending_payments:
+            self.pending_payments.append(loan_id)
+        elif not value and loan_id in self.pending_payments:
+            self.pending_payments.remove(loan_id)
+
+        self.update_totals()
+
+    def select_all_payments(self):
+        if not self.current_payment_date:
+            logger.warning("Aucune date sélectionnée")
+            return
+
+        self.pending_payments = []
+        for widget in self.ids.daily_payments_list.children:
+            if hasattr(widget, "loan_id"):
+                self.pending_payments.append(widget.loan_id)
+
+        for widget in self.ids.daily_payments_list.children:
+            if hasattr(widget, "loan_id"):
+                widget.is_paid = True
+
+        self.update_totals()
+
+    def save_payments(self):
+        try:
+            if not self.current_payment_date:
+                logger.warning("Aucune date sélectionnée - Cliquez d'abord sur Charger")
+                return
+
+            if not self.pending_payments:
+                logger.warning("Aucun paiement à sauvegarder")
+                return
+
+            db = get_database()
+            saved_count = 0
+            payments_to_save = list(self.pending_payments)
+
+            for loan_id in payments_to_save:
+                try:
+                    montant = None
+                    if hasattr(self, "ids") and hasattr(
+                        self.ids, "daily_payments_list"
+                    ):
+                        for widget in self.ids.daily_payments_list.children:
+                            if hasattr(widget, "loan_id") and widget.loan_id == loan_id:
+                                if hasattr(widget, "montant_journalier_value"):
+                                    montant = widget.montant_journalier_value
+                                    break
+
+                    if montant is None:
+                        logger.warning(f"Montant non trouvé pour prêt {loan_id}")
+                        continue
+
+                    payment_date = f"{self.current_payment_date}T00:00:00"
+                    logger.info(
+                        f"Saving payment for loan {loan_id} with date: {payment_date}"
+                    )
+                    db.record_payment(loan_id, montant, date_paiement=payment_date)
+                    saved_count += 1
+                except Exception as e:
+                    logger.error(f"Erreur pour prêt {loan_id}: {e}")
+                    continue
+
+            logger.info(f"Paiements sauvegardés: {saved_count}")
+            self.pending_payments = []
+            self.refresh_daily_payments()
+
+            app = App.get_running_app()
+            root = app.root
+            root.force_refresh_history()
+        except Exception as e:
+            logger.error(f"Erreur dans save_payments: {e}")
+        try:
+            app = App.get_running_app()
+            root = app.root
+            if hasattr(root, "refresh_history"):
+                root.refresh_history()
+        except Exception as e:
+            logger.error(f"Erreur refresh: {e}")
+
+    def update_totals(self):
+        try:
+            db = get_database()
+
+            if self.current_payment_date:
+                daily = db.get_revenue_for_date(self.current_payment_date)
+            else:
+                daily = 0
+
+            weekly = db.get_weekly_revenue()
+
+            if hasattr(self, "ids"):
+                if hasattr(self.ids, "daily_label"):
+                    self.ids.daily_label.text = f"Jour: {daily:.2f} AR"
+                if hasattr(self.ids, "weekly_label"):
+                    self.ids.weekly_label.text = f"Semaine: {weekly:.2f} AR"
+
+            marked_count = len(self.pending_payments)
+            total_due = 0
+
+            if hasattr(self, "ids") and hasattr(self.ids, "daily_payments_list"):
+                for widget in self.ids.daily_payments_list.children:
+                    if hasattr(widget, "montant_journalier_value"):
+                        total_due += widget.montant_journalier_value
+
+            if hasattr(self, "ids") and hasattr(self.ids, "current_date_label"):
+                self.ids.current_date_label.text = (
+                    f"Paiements du {self.current_payment_date or ''} - "
+                    f"{marked_count} sélectionnés - Total: {total_due:.2f} AR"
+                )
+        except Exception as e:
+            logger.error(f"Erreur dans update_totals: {e}")
+
+    def add_manual_payment(self):
+        loan_id_text = self.ids.manual_loan_input.text.strip()
+        montant_text = self.ids.manual_amount_input.text.strip()
+        date_text = self.ids.manual_date_input.text.strip()
+
+        if not loan_id_text or not montant_text:
+            logger.warning("Veuillez entrer le numéro de prêt et le montant")
+            return
+
+        try:
+            loan_id = int(loan_id_text)
+            montant = float(montant_text)
+        except ValueError:
+            logger.warning("Format invalide")
+            return
+
+        if montant <= 0:
+            logger.warning("Montant invalide")
+            return
+
+        payment_date = None
+        if date_text:
+            try:
+                day, month, year = date_text.split("/")
+                payment_date = f"{year}-{month.zfill(2)}-{day.zfill(2)}T00:00:00"
+            except:
+                logger.warning("Format date invalide, utilisation de la date actuelle")
+
         db = get_database()
-        active_loans = db.get_active_loans()
-        self.ids.loan_spinner.values = [
-            f"{loan['client_nom']} - Lampe {loan['lampe_numero']}"
-            for loan in active_loans
-        ]
+        try:
+            db.record_payment(loan_id, montant, date_paiement=payment_date)
+            logger.info(
+                f"Paiement manuel enregistré: prêt {loan_id}, montant {montant}"
+            )
+            self.ids.manual_loan_input.text = ""
+            self.ids.manual_amount_input.text = ""
+            self.ids.manual_date_input.text = self.get_current_date()
+            self.refresh_daily_payments()
+            self.update_totals()
+        except Exception as e:
+            logger.error(f"Erreur: {e}")
+
+
+class HistoryScreen(MDScreen):
+    def on_enter(self):
+        self.refresh_transactions()
+        self.update_totals()
 
     def refresh_transactions(self):
         db = get_database()
         transactions = db.get_all_transactions()
+        logger.info(f"refresh_transactions: found {len(transactions)} transactions")
         self.ids.transactions_list.clear_widgets()
         for t in transactions:
+            date_str = t["date_paiement"].replace("T", " ").split(".")[0]
             item = TransactionListItem(
                 client_nom=t["client_nom"],
                 lampe_numero=t["lampe_numero"],
-                date_paiement=t["date_paiement"][:10],
+                date_paiement=date_str,
                 montant=f"{t['montant']:.2f}",
             )
             item.transaction_id = t["id"]
@@ -632,38 +897,87 @@ class PaymentScreen(MDScreen):
         self.update_totals()
 
     def update_totals(self):
+        from datetime import date
+
         db = get_database()
         daily = db.get_daily_revenue()
         weekly = db.get_weekly_revenue()
-        self.ids.daily_label.text = f"Jour: {daily:.2f} CFA"
-        self.ids.weekly_label.text = f"Semaine: {weekly:.2f} CFA"
-
-    def record_payment(self, loan_info: str, montant: float):
-        if montant <= 0:
-            logger.warning("Montant invalide")
-            return
-
-        db = get_database()
-        active_loans = db.get_active_loans()
-        loan = next(
-            (
-                loan_item
-                for loan_item in active_loans
-                if f"{loan_item['client_nom']} - Lampe {loan_item['lampe_numero']}"
-                == loan_info
-            ),
-            None,
+        monthly = db.get_monthly_revenue()
+        self.ids.daily_label.text = f"Aujourd'hui: {daily:.2f} AR"
+        self.ids.weekly_label.text = f"Semaine: {weekly:.2f} AR"
+        self.ids.monthly_label.text = f"Mois: {monthly:.2f} AR"
+        self.ids.current_date_label.text = (
+            f"Historique - {date.today().strftime('%d/%m/%Y')}"
         )
-        if not loan:
-            logger.warning("Prêt non trouvé")
-            return
 
-        try:
-            db.record_payment(loan["id"], montant)
-            logger.info("Paiement enregistré")
+    def filter_transactions(self):
+        date_text = self.ids.history_date_input.text.strip()
+        if not date_text:
             self.refresh_transactions()
-        except Exception as e:
-            logger.error(f"Erreur: {e}")
+            return
+        try:
+            day, month, year = date_text.split("/")
+            filter_date = f"{year}-{month.zfill(2)}-{day.zfill(2)}"
+        except:
+            logger.warning("Format date invalide")
+            return
+        db = get_database()
+        transactions = db.get_all_transactions()
+        filtered = [
+            t for t in transactions if t["date_paiement"].startswith(filter_date)
+        ]
+        self.ids.transactions_list.clear_widgets()
+        for t in filtered:
+            date_str = t["date_paiement"].replace("T", " ").split(".")[0]
+            item = TransactionListItem(
+                client_nom=t["client_nom"],
+                lampe_numero=t["lampe_numero"],
+                date_paiement=date_str,
+                montant=f"{t['montant']:.2f}",
+            )
+            item.transaction_id = t["id"]
+            self.ids.transactions_list.add_widget(item)
+
+    def filter_today_transactions(self):
+        from datetime import date
+
+        today = date.today().isoformat()
+        db = get_database()
+        transactions = db.get_all_transactions()
+        filtered = [t for t in transactions if t["date_paiement"].startswith(today)]
+        self.ids.transactions_list.clear_widgets()
+        for t in filtered:
+            item = TransactionListItem(
+                client_nom=t["client_nom"],
+                lampe_numero=t["lampe_numero"],
+                date_paiement=t["date_paiement"].replace("T", " ").split(".")[0],
+                montant=f"{t['montant']:.2f}",
+            )
+            item.transaction_id = t["id"]
+            self.ids.transactions_list.add_widget(item)
+
+    def filter_this_month_transactions(self):
+        from datetime import date
+
+        today = date.today()
+        month_start = today.replace(day=1).isoformat()
+        db = get_database()
+        transactions = db.get_all_transactions()
+        filtered = [
+            t
+            for t in transactions
+            if month_start <= t["date_paiement"].split("T")[0] <= today.isoformat()
+        ]
+        self.ids.transactions_list.clear_widgets()
+        for t in filtered:
+            item = TransactionListItem(
+                client_nom=t["client_nom"],
+                lampe_numero=t["lampe_numero"],
+                date_paiement=t["date_paiement"].replace("T", " ").split(".")[0],
+                montant=f"{t['montant']:.2f}",
+            )
+            item.transaction_id = t["id"]
+            self.ids.transactions_list.add_widget(item)
 
 
 class LampManagerApp(MDApp):
