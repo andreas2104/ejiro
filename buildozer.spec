@@ -17,14 +17,14 @@ source.include_exts = py,png,jpg,kv,atlas,db,md
 
 # (list) Source files to exclude (let empty to not exclude anything)
 source.exclude_exts = spec
-source.exclude_dirs = venv, tests, .git, .github, __pycache__, .pytest_cache, .ruff_cache, screens
+source.exclude_dirs = venv, tests, .git, .github, __pycache__, .pytest_cache, .ruff_cache
 
 # (str) Application versioning (method 1)
 version = 1.0.0
 
 # (list) Application requirements
 # comma separated e.g. requirements = sqlite3,kivy
-requirements = python3==3.11,kivy==2.3.0,kivymd==1.1.1,fpdf2,pillow,sqlite3
+requirements = python3==3.11.5,kivy==2.3.0,kivymd==1.2.0,fpdf2,pillow,android,pyjnius,sdl2
 
 # (str) Application icon
 icon.filename = %(source.dir)s/logo_e-jiro.png
