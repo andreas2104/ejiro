@@ -3,7 +3,7 @@ from datetime import datetime, date
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.lang import Builder
-from kivy.properties import StringProperty, BooleanProperty
+from kivy.properties import StringProperty, BooleanProperty, ListProperty
 from kivy.metrics import sp
 from kivy.uix.popup import Popup
 from kivy.uix.boxlayout import BoxLayout
@@ -17,8 +17,19 @@ from kivymd.uix.button import MDRaisedButton
 from kivymd.uix.pickers import MDDatePicker
 
 from database import DatabaseManager
+from pdf_generator import generate_payment_report
 
 logger = logging.getLogger(__name__)
+
+DAY_COLORS = {
+    0: (0.3, 0.7, 0.3, 1),  # Monday - Green
+    1: (0.1, 0.5, 0.8, 1),  # Tuesday - Blue
+    2: (0.6, 0.3, 0.8, 1),  # Wednesday - Purple
+    3: (1.0, 0.6, 0.2, 1),  # Thursday - Orange
+    4: (0.0, 0.6, 0.6, 1),  # Friday - Teal
+    5: (0.9, 0.8, 0.2, 1),  # Saturday - Yellow
+    6: (0.8, 0.3, 0.3, 1),  # Sunday - Red
+}
 
 
 class HeaderBar(BoxLayout):
@@ -128,6 +139,7 @@ class TransactionListItem(ButtonBehavior, BoxLayout):
     lampe_numero = StringProperty()
     date_paiement = StringProperty()
     montant = StringProperty()
+    day_color = ListProperty([0.5, 0.5, 0.5, 1])
     transaction_id = None
 
 
@@ -135,6 +147,33 @@ class StatCard(MDCard, ButtonBehavior):
     title = StringProperty()
     value = StringProperty()
     icon = StringProperty()
+
+
+class FolderChooserPopup(Popup):
+    initial_path = StringProperty("")
+    
+    def __init__(self, callback, **kwargs):
+        super().__init__(**kwargs)
+        self.callback = callback
+        self.initial_path = self._get_initial_path()
+
+    def _get_initial_path(self):
+        import os
+        # Try Downloads, then Home
+        paths = [
+            os.path.join(os.path.expanduser("~"), "Downloads"),
+            os.path.join(os.path.expanduser("~"), "Téléchargements"),
+            os.path.expanduser("~")
+        ]
+        for p in paths:
+            if os.path.exists(p):
+                return p
+        return os.getcwd()
+
+    def select_folder(self, path):
+        if self.callback:
+            self.callback(path)
+        self.dismiss()
 
 
 class DailyPaymentListItem(BoxLayout):
@@ -934,9 +973,62 @@ class PaymentScreen(MDScreen):
                     day_total += lamp["montant"]
         self.ids.total_label.text = f"Total: {day_total:.0f} Ar"
 
+    def generate_pdf_report(self):
+        db = get_database()
+        data = db.get_payments_by_date(self.selected_date)
+        if not data:
+            logger.warning("No data found for the selected date")
+            return
+        
+        # Open folder picker first
+        popup = FolderChooserPopup(callback=self._on_folder_selected)
+        popup.open()
+
+    def _on_folder_selected(self, output_dir):
+        db = get_database()
+        data = db.get_payments_by_date(self.selected_date)
+        
+        try:
+            app = MDApp.get_running_app()
+            business_name = app.business_name if hasattr(app, "business_name") else "e-Jiro"
+            filename = generate_payment_report(
+                self.selected_date, 
+                data, 
+                business_name=business_name,
+                output_dir=output_dir
+            )
+            # Show success message
+            self.show_success_dialog(filename)
+            logger.info(f"Report generated: {filename}")
+        except Exception as e:
+            logger.error(f"Failed to generate report: {e}")
+
+    def show_success_dialog(self, filepath):
+        content = BoxLayout(orientation="vertical", padding="12dp", spacing="12dp")
+        content.add_widget(MDLabel(
+            text=f"Le rapport a été enregistré avec succès dans :\n\n{filepath}",
+            halign="center"
+        ))
+        btn = MDRaisedButton(
+            text="OK",
+            pos_hint={"center_x": 0.5},
+            on_release=lambda x: self.success_dialog.dismiss()
+        )
+        content.add_widget(btn)
+        
+        from kivy.uix.popup import Popup
+        self.success_dialog = Popup(
+            title="Succès",
+            content=content,
+            size_hint=(0.8, 0.4)
+        )
+        self.success_dialog.open()
+
 class HistoryScreen(MDScreen):
     selected_date = StringProperty("")
     total_filtered_amount = StringProperty("0 Ar")
+    paid_count = StringProperty("0")
+    unpaid_count = StringProperty("0")
 
     def on_enter(self):
         Clock.schedule_once(lambda dt: self.refresh_history())
@@ -969,8 +1061,17 @@ class HistoryScreen(MDScreen):
         db = get_database()
         if self.selected_date:
             transactions = db.get_transactions_on_date(self.selected_date)
+            # Calculate stats for the selected date
+            payments = db.get_payments_by_date(self.selected_date)
+            self.paid_count = str(sum(1 for p in payments if p["is_paid"]))
+            self.unpaid_count = str(sum(1 for p in payments if not p["is_paid"]))
         else:
             transactions = db.get_all_transactions()
+            # If no date selected, maybe show stats for today
+            today = date.today().isoformat()
+            payments = db.get_payments_by_date(today)
+            self.paid_count = str(sum(1 for p in payments if p["is_paid"]))
+            self.unpaid_count = str(sum(1 for p in payments if not p["is_paid"]))
 
         self.ids.history_list.clear_widgets()
         total_sum = 0
@@ -978,18 +1079,24 @@ class HistoryScreen(MDScreen):
             try:
                 dt = datetime.fromisoformat(t["date_paiement"])
                 date_str = dt.strftime("%Y-%m-%d %H:%M")
+                # Get color based on day of week (0=Monday)
+                weekday = dt.weekday()
+                d_color = DAY_COLORS.get(weekday, (0.5, 0.5, 0.5, 1))
             except Exception:
                 date_str = t["date_paiement"][:16]
+                d_color = (0.5, 0.5, 0.5, 1)
 
             item = TransactionListItem(
                 client_nom=t["client_nom"],
                 lampe_numero=t["lamps_numero"],
                 date_paiement=date_str,
-                montant=f"{t['montant']:.0f} Ar",
+                montant=f"{t['montant']:.0f}",
+                day_color=d_color
             )
             item.transaction_id = t["id"]
             self.ids.history_list.add_widget(item)
             total_sum += t["montant"]
+        self.total_filtered_amount = f"{total_sum:.0f} Ar"
 
     def update_totals(self):
         db = get_database()
@@ -1008,6 +1115,46 @@ class HistoryScreen(MDScreen):
             self.ids.current_date_label.text = (
                 f"Historique - {date.today().strftime('%d/%m/%Y')}"
             )
+
+    def show_clear_confirmation(self):
+        content = BoxLayout(orientation="vertical", padding="24dp", spacing="16dp")
+        content.add_widget(
+            MDLabel(text="Voulez-vous vraiment\nsupprimer tout l'historique?", halign="center")
+        )
+        btn_layout = BoxLayout(size_hint_y=None, height="48dp", spacing="12dp")
+        btn_confirm = MDRaisedButton(
+            text="Oui, Tout Effacer", 
+            on_press=self.confirm_clear_history,
+            md_bg_color=(0.9, 0.3, 0.3, 1)
+        )
+        btn_cancel = MDRaisedButton(text="Annuler", on_press=self.cancel_clear)
+        btn_layout.add_widget(btn_confirm)
+        btn_layout.add_widget(btn_cancel)
+        content.add_widget(btn_layout)
+
+        self.clear_popup = Popup(
+            title="Confirmer suppression",
+            content=content,
+            size_hint=(0.8, 0.4),
+            auto_dismiss=False,
+        )
+        self.clear_popup.open()
+
+    def confirm_clear_history(self, *args):
+        try:
+            get_database().clear_all_transactions()
+            logger.info("History cleared")
+            self.refresh_history()
+            # Also refresh dashboard stats
+            app = MDApp.get_running_app()
+            dashboard_screen = app.root.ids.screen_manager.get_screen("dashboard")
+            dashboard_screen.update_stats()
+        except Exception as e:
+            logger.error(f"Error: {e}")
+        self.clear_popup.dismiss()
+
+    def cancel_clear(self, *args):
+        self.clear_popup.dismiss()
 
     def filter_transactions(self, query=None):
         # We can implement specific filtering logic here if needed

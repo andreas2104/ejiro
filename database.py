@@ -41,7 +41,6 @@ class DatabaseManager:
                     lampe_id INTEGER NOT NULL,
                     montant_journalier REAL NOT NULL,
                     date_debut TEXT NOT NULL,
-                    montant_journalier REAL NOT NULL,
                     statut TEXT CHECK(statut IN ('actif', 'terminé')) DEFAULT 'actif',
                     FOREIGN KEY (client_id) REFERENCES clients(id),
                     FOREIGN KEY (lampe_id) REFERENCES lamps(id)
@@ -658,3 +657,10 @@ class DatabaseManager:
     def get_unpaid_clients_today(self) -> List[Dict[str, Any]]:
         # This method can be redirected to get_payments_by_date for consistency
         return [c for c in self.get_payments_by_date(datetime.now().date().isoformat()) if not c["is_paid"]]
+
+    def clear_all_transactions(self) -> None:
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute("DELETE FROM transactions")
+            conn.commit()
+            logger.info("All transactions cleared")
