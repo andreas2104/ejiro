@@ -65,8 +65,9 @@ jobs:
             --hidden-import "kivymd" \
             --hidden-import "kivy" \
             --hidden-import "fpdf" \
-            --collect-all "kivy" \
             --collect-all "kivymd" \
+            --exclude-module "tests" \
+            --exclude-module "test" \
             main.py
 
       - name: Package as tar.gz
@@ -120,8 +121,9 @@ jobs:
             --hidden-import "kivymd" `
             --hidden-import "kivy" `
             --hidden-import "fpdf" `
-            --collect-all "kivy" `
             --collect-all "kivymd" `
+            --exclude-module "tests" `
+            --exclude-module "test" `
             main.py
 
       - name: Upload Windows artifact
