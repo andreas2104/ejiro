@@ -10,8 +10,8 @@ DB_PATH = "e-jiro.db"
 
 
 class DatabaseManager:
-    def __init__(self, db_path: str = DB_PATH):
-        self.db_path = db_path
+    def __init__(self, db_path: Optional[str] = None):
+        self.db_path = db_path if db_path else DB_PATH
         self._init_tables()
 
     def _init_tables(self) -> None:

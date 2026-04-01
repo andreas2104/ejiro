@@ -114,7 +114,6 @@ jobs:
         run: |
           $env:KIVY_GL_BACKEND = "angle_sdl2"
           $env:KIVY_NO_CONSOLELOG = "1"
-          $env:SDL_VIDEODRIVER = "dummy"
           pyinstaller `
             --name "e-jiro" `
             --onefile `

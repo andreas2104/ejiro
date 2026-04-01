@@ -5,6 +5,7 @@ All widget and screen classes are imported here before the KV file is loaded
 so that Kivy's rule-parser can resolve them by name.
 """
 import logging
+import os
 
 from kivy.lang import Builder
 from kivy.properties import StringProperty
@@ -21,7 +22,9 @@ class EJiroApp(MDApp):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        self.database = DatabaseManager()
+        # Use a writable directory for the database (especially on Android)
+        db_path = os.path.join(self.user_data_dir, "e-jiro.db")
+        self.database = DatabaseManager(db_path=db_path)
         self.business_name = self.database.get_setting("business_name", "e-Jiro")
 
     def build(self):
