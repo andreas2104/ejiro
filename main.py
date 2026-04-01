@@ -1,5 +1,5 @@
 import logging
-from datetime import date
+from datetime import datetime, date
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.lang import Builder
@@ -14,6 +14,7 @@ from kivymd.uix.card import MDCard
 from kivymd.uix.label import MDLabel
 from kivymd.uix.textfield import MDTextField
 from kivymd.uix.button import MDRaisedButton
+from kivymd.uix.pickers import MDDatePicker
 
 from database import DatabaseManager
 
@@ -33,22 +34,27 @@ class RootWidget(BoxLayout):
     def exit_app(self):
         App.get_running_app().stop()
 
+    def toggle_nav_drawer(self):
+        drawer = self.ids.nav_drawer
+        if drawer.state == "open":
+            drawer.set_state("close")
+        else:
+            drawer.set_state("open")
+
     def refresh_history(self):
         logger.info("refresh_history called")
         history_screen = self.ids.screen_manager.get_screen("history")
-        if hasattr(history_screen, "refresh_transactions"):
-            logger.info("Calling history refresh_transactions")
-            Clock.schedule_once(lambda dt: history_screen.refresh_transactions())
-            Clock.schedule_once(lambda dt: history_screen.update_totals())
+        if hasattr(history_screen, "refresh_history"):
+            logger.info("Calling history refresh_history")
+            Clock.schedule_once(lambda dt: history_screen.refresh_history())
         else:
-            logger.warning("history screen has no refresh_transactions")
+            logger.warning("history screen has no refresh_history")
 
     def force_refresh_history(self):
         logger.info("force_refresh_history called")
         try:
             history_screen = self.ids.screen_manager.get_screen("history")
-            history_screen.refresh_transactions()
-            history_screen.update_totals()
+            history_screen.refresh_history()
             logger.info("History refreshed successfully")
         except Exception as e:
             logger.error(f"Error force refreshing history: {e}")
@@ -83,12 +89,38 @@ class LampListItem(ButtonBehavior, BoxLayout):
     lamp_id = None
 
 
-class LoanListItem(ButtonBehavior, BoxLayout):
+class LoanListItem(BoxLayout):
     client_nom = StringProperty()
     lampe_numero = StringProperty()
-    date_debut = StringProperty()
-    statut = StringProperty()
+    montant_journalier = StringProperty()
     loan_id = None
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+
+
+class LoanListItemWithSelect(ButtonBehavior, BoxLayout):
+    client_nom = StringProperty()
+    lampe_numero = StringProperty()
+    montant_journalier = StringProperty()
+    loan_id = None
+
+
+class ClientPaymentItem(ButtonBehavior, BoxLayout):
+    client_nom = StringProperty()
+    client_telephone = StringProperty()
+    client_adresse = StringProperty()
+    total_journalier = StringProperty()
+    lamps_info = StringProperty()
+    is_paid = BooleanProperty(False)
+    client_id = None
+    pret_id = None
+    client_data = None
+
+    def on_paid_toggle(self, is_paid):
+        app = App.get_running_app()
+        payment_screen = app.root.ids.screen_manager.get_screen("payment")
+        payment_screen.on_client_paid_toggle(self, is_paid)
 
 
 class TransactionListItem(ButtonBehavior, BoxLayout):
@@ -97,6 +129,12 @@ class TransactionListItem(ButtonBehavior, BoxLayout):
     date_paiement = StringProperty()
     montant = StringProperty()
     transaction_id = None
+
+
+class StatCard(MDCard, ButtonBehavior):
+    title = StringProperty()
+    value = StringProperty()
+    icon = StringProperty()
 
 
 class DailyPaymentListItem(BoxLayout):
@@ -219,15 +257,36 @@ def get_database() -> DatabaseManager:
 
 
 class DashboardScreen(MDScreen):
-    def on_enter(self):
-        Clock.schedule_once(lambda dt: self.update_revenue())
+    client_count = StringProperty("0")
+    lamp_count = StringProperty("0")
+    loan_count = StringProperty("0")
+    daily_revenue = StringProperty("0 Ar")
+    total_revenue = StringProperty("0 Ar")
 
-    def update_revenue(self):
+    def on_enter(self):
+        Clock.schedule_once(lambda dt: self.update_stats())
+
+    def update_stats(self):
         db = get_database()
         daily = db.get_daily_revenue()
+        daily = db.get_daily_revenue()
+        total = db.get_total_revenue()
         weekly = db.get_weekly_revenue()
-        self.ids.daily_label.text = f"Journalier: {daily:.2f} AR"
-        self.ids.weekly_label.text = f"Hebdomadaire: {weekly:.2f} AR"
+        client_count = db.get_clients_count()
+        lamp_count = db.get_lamps_count()
+        loan_count = db.get_active_loans_count()
+
+        self.client_count = str(client_count)
+        self.lamp_count = str(lamp_count)
+        self.loan_count = str(loan_count)
+        self.daily_revenue = f"{daily:.0f} Ar"
+        self.total_revenue = f"{total:.0f} Ar"
+
+        # Update labels if they exist (for backward compatibility with old layout)
+        if hasattr(self.ids, "daily_label"):
+            self.ids.daily_label.text = f"Journalier: {daily:.2f} AR"
+        if hasattr(self.ids, "weekly_label"):
+            self.ids.weekly_label.text = f"Hebdomadaire: {weekly:.2f} AR"
 
 
 class ClientFormModal(Popup):
@@ -354,9 +413,9 @@ class ClientsScreen(MDScreen):
         except Exception as e:
             logger.error(f"Erreur show_client_form: {e}")
 
-    def refresh_clients(self):
+    def refresh_clients(self, query=None):
         db = get_database()
-        clients = db.get_all_clients()
+        clients = db.get_all_clients(query=query)
         self.ids.clients_list.clear_widgets()
         for c in clients:
             item = ClientListItem(
@@ -421,9 +480,9 @@ class InventoryScreen(MDScreen):
         Clock.schedule_once(lambda dt: self.refresh_inventory())
         self.modal = LampFormModal()
 
-    def refresh_inventory(self):
+    def refresh_inventory(self, query=None):
         db = get_database()
-        lamps = db.get_all_lamps()
+        lamps = db.get_all_lamps(query=query)
         self.ids.inventory_list.clear_widgets()
         for lamp in lamps:
             item = LampListItem(
@@ -498,6 +557,134 @@ class InventoryScreen(MDScreen):
         self.delete_popup.dismiss()
 
 
+class LoanFormModal(Popup):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.loan_screen = None
+        self.client_spinner = None
+        self.lampe_spinner = None
+        self.montant_input = None
+        self.form_title = None
+        self.save_button = None
+        self._build_ui()
+
+    def _build_ui(self):
+        card = MDCard(
+            orientation="vertical",
+            padding="24dp",
+            spacing="16dp",
+            md_bg_color=(1, 1, 1, 1),
+        )
+
+        self.form_title = MDLabel(
+            text="Nouveau Prêt",
+            font_style="H5",
+            halign="center",
+            size_hint_y=None,
+            height="40dp",
+            theme_text_color="Custom",
+            text_color=(0, 0, 0, 1),
+        )
+        card.add_widget(self.form_title)
+
+        from kivy.uix.spinner import Spinner
+
+        self.client_spinner = Spinner(
+            text="Sélectionner Client",
+            values=[],
+            size_hint_y=None,
+            height="48dp",
+        )
+        card.add_widget(self.client_spinner)
+
+        self.lampe_spinner = Spinner(
+            text="Sélectionner Lampe",
+            values=[],
+            size_hint_y=None,
+            height="48dp",
+        )
+        card.add_widget(self.lampe_spinner)
+
+        self.montant_input = MDTextField(
+            hint_text="Montant journalier (Ar)",
+            mode="rectangle",
+            size_hint_y=None,
+            height="48dp",
+            input_filter="float",
+        )
+        card.add_widget(self.montant_input)
+
+        btn_layout = BoxLayout(size_hint_y=None, height="48dp", spacing="12dp")
+        self.save_button = MDRaisedButton(text="Ajouter", on_press=self.save_from_modal)
+        cancel_button = MDRaisedButton(text="Annuler", on_press=self.dismiss)
+        btn_layout.add_widget(self.save_button)
+        btn_layout.add_widget(cancel_button)
+        card.add_widget(btn_layout)
+
+        self.add_widget(card)
+
+    def open(self, loan_screen):
+        self.loan_screen = loan_screen
+        db = get_database()
+
+        # Populate clients
+        clients = db.get_all_clients()
+        self.client_spinner.values = [c["nom"] for c in clients]
+        self.client_spinner.text = "Sélectionner Client"
+
+        # Populate available lamps
+        available_lamps = [
+            lamp for lamp in db.get_all_lamps() if lamp["etat"] == "disponible"
+        ]
+        self.lampe_spinner.values = [lamp["numero"] for lamp in available_lamps]
+        self.lampe_spinner.text = "Sélectionner Lampe"
+
+        self.montant_input.text = ""
+        super().open()
+
+    def save_from_modal(self, *args):
+        client_nom = self.client_spinner.text
+        lampe_numero = self.lampe_spinner.text
+        montant_text = self.montant_input.text.strip()
+
+        if client_nom == "Sélectionner Client" or lampe_numero == "Sélectionner Lampe":
+            logger.warning("Veuillez sélectionner un client et une lampe")
+            return
+
+        try:
+            montant_journalier = float(montant_text) if montant_text else 0
+        except ValueError:
+            logger.warning("Montant invalide")
+            return
+
+        if montant_journalier <= 0:
+            logger.warning("Le montant doit être positif")
+            return
+
+        db = get_database()
+        clients = db.get_all_clients()
+        client = next((c for c in clients if c["nom"] == client_nom), None)
+        lampe = next(
+            (lamp for lamp in db.get_all_lamps() if lamp["numero"] == lampe_numero),
+            None,
+        )
+
+        if not client or not lampe:
+            logger.warning("Données invalides")
+            return
+
+        try:
+            db.assign_lamps_to_client(client["id"], lampe["id"], montant_journalier)
+            logger.info(f"Prêt créé: {montant_journalier}/jour")
+            self.loan_screen.refresh_loans()
+            self.dismiss()
+        except Exception as e:
+            logger.error(f"Erreur: {e}")
+
+    def dismiss(self, *args):
+        super().dismiss()
+
+
 class LoanScreen(MDScreen):
     selected_loan_id = None
 
@@ -505,28 +692,38 @@ class LoanScreen(MDScreen):
         Clock.schedule_once(lambda dt: self.load_data())
         Clock.schedule_once(lambda dt: self.refresh_loans())
 
+    def show_loan_form(self, *args):
+        # We might not need this anymore if we are using on-screen creation
+        pass
+
     def load_data(self):
         db = get_database()
         clients = db.get_all_clients()
-        self.ids.client_spinner.values = [c["nom"] for c in clients]
+        if hasattr(self.ids, "client_spinner"):
+            self.ids.client_spinner.values = [c["nom"] for c in clients]
         available_lamps = [
             lamp for lamp in db.get_all_lamps() if lamp["etat"] == "disponible"
         ]
-        self.ids.lampe_spinner.values = [lamp["numero"] for lamp in available_lamps]
+        if hasattr(self.ids, "lampe_spinner"):
+            self.ids.lampe_spinner.values = [lamp["numero"] for lamp in available_lamps]
+        
+        # Pre-fill default rate
+        if hasattr(self.ids, "montant_input"):
+            default_rate = db.get_setting("default_rate", "1000")
+            self.ids.montant_input.text = default_rate
 
-    def refresh_loans(self):
+    def refresh_loans(self, query=None):
         db = get_database()
-        loans = db.get_all_loans()
+        loans = db.get_all_loans(query=query)
         self.ids.loans_list.clear_widgets()
         for loan in loans:
-            item = LoanListItem(
+            item = LoanListItemWithSelect(
                 client_nom=loan["client_nom"],
-                lampe_numero=loan["lampe_numero"],
-                date_debut=loan["date_debut"][:10],
-                statut=loan["statut"],
+                lampe_numero=loan["lamps_numero"],
+                montant_journalier=f"{loan['montant_journalier']:.0f}",
             )
             item.loan_id = loan["id"]
-            item.bind(on_press=lambda instance: self.select_loan(instance.loan_id))
+            item.bind(on_press=lambda inst: self.select_loan(inst.loan_id))
             self.ids.loans_list.add_widget(item)
         self.selected_loan_id = None
 
@@ -534,9 +731,16 @@ class LoanScreen(MDScreen):
         self.selected_loan_id = loan_id
         logger.info(f"Prêt sélectionné: {loan_id}")
 
-    def assign_lampe(
-        self, client_nom: str, lampe_numero: str, montant_journalier: float
-    ):
+    def assign_lampe(self, client_nom: str, lampe_numero: str, montant_text: str):
+        try:
+            montant_journalier = float(montant_text) if montant_text else 0
+        except ValueError:
+            logger.warning("Montant invalide")
+            return
+
+        if montant_journalier <= 0:
+            logger.warning("Le montant doit être positif")
+            return
         db = get_database()
         clients = db.get_all_clients()
         client = next((c for c in clients if c["nom"] == client_nom), None)
@@ -553,8 +757,8 @@ class LoanScreen(MDScreen):
             return
 
         try:
-            db.assign_lampe_to_client(client["id"], lampe["id"], montant_journalier)
-            logger.info("Prêt créé")
+            db.assign_lamps_to_client(client["id"], lampe["id"], montant_journalier)
+            logger.info(f"Prêt créé: {montant_journalier}/jour")
             self.refresh_loans()
             self.load_data()
         except Exception as e:
@@ -642,348 +846,182 @@ class LoanScreen(MDScreen):
 
 
 class PaymentScreen(MDScreen):
+    selected_date = StringProperty("")
+
     def on_enter(self):
-        self.current_payment_date = date.today().isoformat()
-        self.pending_payments = []
-        self.ids.current_date_label.text = (
-            f"Paiements du {date.today().strftime('%d/%m/%Y')}"
-        )
-        self.refresh_daily_payments()
+        if not self.selected_date:
+            self.selected_date = datetime.now().date().isoformat()
+        Clock.schedule_once(lambda dt: self.refresh_clients())
 
-    def load_today_payments(self):
-        self.current_payment_date = date.today().isoformat()
-        self.ids.current_date_label.text = (
-            f"Paiements du {date.today().strftime('%d/%m/%Y')}"
-        )
-        self.refresh_daily_payments()
-
-    def go_back(self):
-        from kivy.app import App
-
-        app = App.get_running_app()
-        root = app.root
-        if hasattr(root, "ids") and hasattr(root.ids, "screen_manager"):
-            root.ids.screen_manager.current = "dashboard"
-
-    def get_current_date(self):
-        from datetime import date
-
-        return date.today().strftime("%d/%m/%Y")
-
-    def load_today_payments(self):
-        from datetime import date
-
-        self.load_payments_for_date()
-
-    def load_payments_for_date(self):
-        from datetime import date
-
-        self.current_payment_date = date.today().isoformat()
-        self.ids.current_date_label.text = (
-            f"Paiements du {date.today().strftime('%d/%m/%Y')}"
-        )
-        self.refresh_daily_payments()
+    def on_selected_date(self, instance, value):
+        if hasattr(self.ids, "date_label"):
+            self.ids.date_label.text = f"Date: {value}"
+        Clock.schedule_once(lambda dt: self.refresh_clients())
 
     def refresh_daily_payments(self):
-        if not self.current_payment_date:
-            return
-
-        try:
-            db = get_database()
-            active_loans = db.get_active_loans()
-
-            if not hasattr(self, "ids") or not hasattr(self.ids, "daily_payments_list"):
-                logger.warning("daily_payments_list not accessible")
-                return
-
-            self.ids.daily_payments_list.clear_widgets()
-            self.pending_payments = []
-
-            for loan in active_loans:
-                item = DailyPaymentListItem(
-                    client_nom=loan["client_nom"],
-                    lampe_numero=loan["lampe_numero"],
-                    montant_journalier=f"{loan['montant_journalier']:.2f}",
-                    is_paid=False,
-                )
-                item.loan_id = loan["id"]
-                item.montant_journalier_value = loan["montant_journalier"]
-                item.bind(on_checkbox_active=self.on_payment_toggle)
-                self.ids.daily_payments_list.add_widget(item)
-
-            self.update_totals()
-        except Exception as e:
-            logger.error(f"Erreur dans refresh_daily_payments: {e}")
-
-    def on_payment_toggle(self, instance, value):
-        loan_id = instance.loan_id
-
-        if value and loan_id not in self.pending_payments:
-            self.pending_payments.append(loan_id)
-        elif not value and loan_id in self.pending_payments:
-            self.pending_payments.remove(loan_id)
-
-        self.update_totals()
-
-    def select_all_payments(self):
-        if not self.current_payment_date:
-            logger.warning("Aucune date sélectionnée")
-            return
-
-        self.pending_payments = []
-        for widget in self.ids.daily_payments_list.children:
-            if hasattr(widget, "loan_id"):
-                self.pending_payments.append(widget.loan_id)
-
-        for widget in self.ids.daily_payments_list.children:
-            if hasattr(widget, "loan_id"):
-                widget.is_paid = True
-
-        self.update_totals()
-
-    def save_payments(self):
-        try:
-            if not self.current_payment_date:
-                logger.warning("Aucune date sélectionnée - Cliquez d'abord sur Charger")
-                return
-
-            if not self.pending_payments:
-                logger.warning("Aucun paiement à sauvegarder")
-                return
-
-            db = get_database()
-            saved_count = 0
-            payments_to_save = list(self.pending_payments)
-
-            for loan_id in payments_to_save:
-                try:
-                    montant = None
-                    if hasattr(self, "ids") and hasattr(
-                        self.ids, "daily_payments_list"
-                    ):
-                        for widget in self.ids.daily_payments_list.children:
-                            if hasattr(widget, "loan_id") and widget.loan_id == loan_id:
-                                if hasattr(widget, "montant_journalier_value"):
-                                    montant = widget.montant_journalier_value
-                                    break
-
-                    if montant is None:
-                        logger.warning(f"Montant non trouvé pour prêt {loan_id}")
-                        continue
-
-                    payment_date = f"{self.current_payment_date}T00:00:00"
-                    logger.info(
-                        f"Saving payment for loan {loan_id} with date: {payment_date}"
-                    )
-                    db.record_payment(loan_id, montant, date_paiement=payment_date)
-                    saved_count += 1
-                except Exception as e:
-                    logger.error(f"Erreur pour prêt {loan_id}: {e}")
-                    continue
-
-            logger.info(f"Paiements sauvegardés: {saved_count}")
-            self.pending_payments = []
-            self.refresh_daily_payments()
-
-            app = App.get_running_app()
-            root = app.root
-            root.force_refresh_history()
-        except Exception as e:
-            logger.error(f"Erreur dans save_payments: {e}")
-        try:
-            app = App.get_running_app()
-            root = app.root
-            if hasattr(root, "refresh_history"):
-                root.refresh_history()
-        except Exception as e:
-            logger.error(f"Erreur refresh: {e}")
+        # Redirect to refresh_clients for consistency
+        self.refresh_clients()
 
     def update_totals(self):
-        try:
-            db = get_database()
+        # Already handled by refresh_total elsewhere or partially here
+        self.refresh_total()
 
-            if self.current_payment_date:
-                daily = db.get_revenue_for_date(self.current_payment_date)
-            else:
-                daily = 0
-
-            weekly = db.get_weekly_revenue()
-
-            if hasattr(self, "ids"):
-                if hasattr(self.ids, "daily_label"):
-                    self.ids.daily_label.text = f"Jour: {daily:.2f} AR"
-                if hasattr(self.ids, "weekly_label"):
-                    self.ids.weekly_label.text = f"Semaine: {weekly:.2f} AR"
-
-            marked_count = len(self.pending_payments)
-            total_due = 0
-
-            if hasattr(self, "ids") and hasattr(self.ids, "daily_payments_list"):
-                for widget in self.ids.daily_payments_list.children:
-                    if hasattr(widget, "montant_journalier_value"):
-                        total_due += widget.montant_journalier_value
-
-            if hasattr(self, "ids") and hasattr(self.ids, "current_date_label"):
-                self.ids.current_date_label.text = (
-                    f"Paiements du {self.current_payment_date or ''} - "
-                    f"{marked_count} sélectionnés - Total: {total_due:.2f} AR"
-                )
-        except Exception as e:
-            logger.error(f"Erreur dans update_totals: {e}")
-
-    def add_manual_payment(self):
-        loan_id_text = self.ids.manual_loan_input.text.strip()
-        montant_text = self.ids.manual_amount_input.text.strip()
-        date_text = self.ids.manual_date_input.text.strip()
-
-        if not loan_id_text or not montant_text:
-            logger.warning("Veuillez entrer le numéro de prêt et le montant")
-            return
-
-        try:
-            loan_id = int(loan_id_text)
-            montant = float(montant_text)
-        except ValueError:
-            logger.warning("Format invalide")
-            return
-
-        if montant <= 0:
-            logger.warning("Montant invalide")
-            return
-
-        payment_date = None
-        if date_text:
+    def show_date_picker(self):
+        date_dialog = MDDatePicker()
+        if self.selected_date:
             try:
-                day, month, year = date_text.split("/")
-                payment_date = f"{year}-{month.zfill(2)}-{day.zfill(2)}T00:00:00"
-            except:
-                logger.warning("Format date invalide, utilisation de la date actuelle")
+                # Expecting YYYY-MM-DD
+                d = datetime.strptime(self.selected_date, "%Y-%m-%d")
+                date_dialog.year = d.year
+                date_dialog.month = d.month
+                date_dialog.day = d.day
+            except Exception as e:
+                logger.error(f"Error parsing date: {e}")
+        date_dialog.bind(on_save=self.on_date_save)
+        date_dialog.open()
 
+    def on_date_save(self, instance, value, date_range):
+        self.selected_date = value.isoformat()
+
+    def refresh_clients(self):
+        db = get_database()
+        if not self.selected_date:
+            self.selected_date = datetime.now().date().isoformat()
+
+        data = db.get_payments_by_date(self.selected_date)
+        self.ids.loans_list.clear_widgets()
+
+        day_total = 0
+        for client in data:
+            for lamp in client["lamps"]:
+                item = ClientPaymentItem(
+                    client_nom=client["client_nom"],
+                    client_telephone=client["client_telephone"],
+                    client_adresse=client["client_adresse"] or "Pas d'adresse",
+                    lamps_info=f"Lampe {lamp['numero']}",
+                    is_paid=lamp["is_paid"],
+                )
+                item.client_id = client["client_id"]
+                item.pret_id = lamp["pret_id"]
+                item.client_data = lamp
+                self.ids.loans_list.add_widget(item)
+                if lamp["is_paid"]:
+                    day_total += lamp["montant"]
+
+        self.ids.total_label.text = f"Total: {day_total:.0f} Ar"
+
+    def on_client_paid_toggle(self, item, is_paid):
         db = get_database()
         try:
-            db.record_payment(loan_id, montant, date_paiement=payment_date)
-            logger.info(
-                f"Paiement manuel enregistré: prêt {loan_id}, montant {montant}"
+            db.toggle_payment(
+                item.pret_id,
+                self.selected_date,
+                float(item.client_data["montant"]),
+                is_paid,
             )
-            self.ids.manual_loan_input.text = ""
-            self.ids.manual_amount_input.text = ""
-            self.ids.manual_date_input.text = self.get_current_date()
-            self.refresh_daily_payments()
-            self.update_totals()
+            logger.info(f"Payment toggled for loan {item.pret_id}: {is_paid}")
+            self.refresh_total()
         except Exception as e:
-            logger.error(f"Erreur: {e}")
+            logger.error(f"Error toggling payment: {e}")
 
+    def refresh_total(self):
+        db = get_database()
+        data = db.get_payments_by_date(self.selected_date)
+        day_total = 0
+        for client in data:
+            for lamp in client["lamps"]:
+                if lamp["is_paid"]:
+                    day_total += lamp["montant"]
+        self.ids.total_label.text = f"Total: {day_total:.0f} Ar"
 
 class HistoryScreen(MDScreen):
-    def on_enter(self):
-        self.refresh_transactions()
-        self.update_totals()
+    selected_date = StringProperty("")
+    total_filtered_amount = StringProperty("0 Ar")
 
-    def refresh_transactions(self):
+    def on_enter(self):
+        Clock.schedule_once(lambda dt: self.refresh_history())
+
+    def on_selected_date(self, instance, value):
+        if hasattr(self.ids, "date_filter_label"):
+            self.ids.date_filter_label.text = f"Date: {value}" if value else "Tous les paiements"
+        Clock.schedule_once(lambda dt: self.refresh_history())
+
+    def show_date_picker(self):
+        date_dialog = MDDatePicker()
+        if self.selected_date:
+            try:
+                d = datetime.strptime(self.selected_date, "%Y-%m-%d")
+                date_dialog.year = d.year
+                date_dialog.month = d.month
+                date_dialog.day = d.day
+            except Exception:
+                pass
+        date_dialog.bind(on_save=self.on_date_save)
+        date_dialog.open()
+
+    def on_date_save(self, instance, value, date_range):
+        self.selected_date = value.isoformat()
+
+    def clear_filter(self):
+        self.selected_date = ""
+
+    def refresh_history(self):
         db = get_database()
-        transactions = db.get_all_transactions()
-        logger.info(f"refresh_transactions: found {len(transactions)} transactions")
-        self.ids.transactions_list.clear_widgets()
+        if self.selected_date:
+            transactions = db.get_transactions_on_date(self.selected_date)
+        else:
+            transactions = db.get_all_transactions()
+
+        self.ids.history_list.clear_widgets()
+        total_sum = 0
         for t in transactions:
-            date_str = t["date_paiement"].replace("T", " ").split(".")[0]
+            try:
+                dt = datetime.fromisoformat(t["date_paiement"])
+                date_str = dt.strftime("%Y-%m-%d %H:%M")
+            except Exception:
+                date_str = t["date_paiement"][:16]
+
             item = TransactionListItem(
                 client_nom=t["client_nom"],
-                lampe_numero=t["lampe_numero"],
+                lampe_numero=t["lamps_numero"],
                 date_paiement=date_str,
-                montant=f"{t['montant']:.2f}",
+                montant=f"{t['montant']:.0f} Ar",
             )
             item.transaction_id = t["id"]
-            self.ids.transactions_list.add_widget(item)
-        self.update_totals()
+            self.ids.history_list.add_widget(item)
+            total_sum += t["montant"]
 
     def update_totals(self):
-        from datetime import date
-
         db = get_database()
         daily = db.get_daily_revenue()
         weekly = db.get_weekly_revenue()
         monthly = db.get_monthly_revenue()
-        self.ids.daily_label.text = f"Aujourd'hui: {daily:.2f} AR"
-        self.ids.weekly_label.text = f"Semaine: {weekly:.2f} AR"
-        self.ids.monthly_label.text = f"Mois: {monthly:.2f} AR"
-        self.ids.current_date_label.text = (
-            f"Historique - {date.today().strftime('%d/%m/%Y')}"
-        )
-
-    def filter_transactions(self):
-        date_text = self.ids.history_date_input.text.strip()
-        if not date_text:
-            self.refresh_transactions()
-            return
-        try:
-            day, month, year = date_text.split("/")
-            filter_date = f"{year}-{month.zfill(2)}-{day.zfill(2)}"
-        except:
-            logger.warning("Format date invalide")
-            return
-        db = get_database()
-        transactions = db.get_all_transactions()
-        filtered = [
-            t for t in transactions if t["date_paiement"].startswith(filter_date)
-        ]
-        self.ids.transactions_list.clear_widgets()
-        for t in filtered:
-            date_str = t["date_paiement"].replace("T", " ").split(".")[0]
-            item = TransactionListItem(
-                client_nom=t["client_nom"],
-                lampe_numero=t["lampe_numero"],
-                date_paiement=date_str,
-                montant=f"{t['montant']:.2f}",
+        
+        if hasattr(self.ids, "daily_label"):
+            self.ids.daily_label.text = f"Aujourd'hui: {daily:.0f} Ar"
+        if hasattr(self.ids, "weekly_label"):
+            self.ids.weekly_label.text = f"Semaine: {weekly:.0f} Ar"
+        if hasattr(self.ids, "monthly_label"):
+            self.ids.monthly_label.text = f"Mois: {monthly:.0f} Ar"
+        
+        if hasattr(self.ids, "current_date_label"):
+            self.ids.current_date_label.text = (
+                f"Historique - {date.today().strftime('%d/%m/%Y')}"
             )
-            item.transaction_id = t["id"]
-            self.ids.transactions_list.add_widget(item)
 
-    def filter_today_transactions(self):
-        from datetime import date
-
-        today = date.today().isoformat()
-        db = get_database()
-        transactions = db.get_all_transactions()
-        filtered = [t for t in transactions if t["date_paiement"].startswith(today)]
-        self.ids.transactions_list.clear_widgets()
-        for t in filtered:
-            item = TransactionListItem(
-                client_nom=t["client_nom"],
-                lampe_numero=t["lampe_numero"],
-                date_paiement=t["date_paiement"].replace("T", " ").split(".")[0],
-                montant=f"{t['montant']:.2f}",
-            )
-            item.transaction_id = t["id"]
-            self.ids.transactions_list.add_widget(item)
-
-    def filter_this_month_transactions(self):
-        from datetime import date
-
-        today = date.today()
-        month_start = today.replace(day=1).isoformat()
-        db = get_database()
-        transactions = db.get_all_transactions()
-        filtered = [
-            t
-            for t in transactions
-            if month_start <= t["date_paiement"].split("T")[0] <= today.isoformat()
-        ]
-        self.ids.transactions_list.clear_widgets()
-        for t in filtered:
-            item = TransactionListItem(
-                client_nom=t["client_nom"],
-                lampe_numero=t["lampe_numero"],
-                date_paiement=t["date_paiement"].replace("T", " ").split(".")[0],
-                montant=f"{t['montant']:.2f}",
-            )
-            item.transaction_id = t["id"]
-            self.ids.transactions_list.add_widget(item)
+    def filter_transactions(self, query=None):
+        # We can implement specific filtering logic here if needed
+        # For now, refresh_history handles the date filter
+        self.refresh_history()
 
 
-class LampManagerApp(MDApp):
+class EJiroApp(MDApp):
+    business_name = StringProperty("e-Jiro")
+
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.database = DatabaseManager()
+        self.business_name = self.database.get_setting("business_name", "e-Jiro")
 
     def build(self):
         Builder.load_file("style.kv")
@@ -991,4 +1029,4 @@ class LampManagerApp(MDApp):
 
 
 if __name__ == "__main__":
-    LampManagerApp().run()
+    EJiroApp().run()

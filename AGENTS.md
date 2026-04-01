@@ -1,8 +1,8 @@
-# AGENTS.md - LampManager Project Guidelines
+# AGENTS.md - e-jiro Project Guidelines
 
 ## Project Overview
 
-LampManager is a Kivy + SQLite desktop/mobile application for managing solar/rechargeable lamp loans. A provider rents lamps to clients with daily fees for recharging.
+e-jiro is a Kivy + SQLite desktop/mobile application for managing solar/rechargeable lamp loans. A provider rents lamps to clients with daily fees for recharging.
 
 ## Tech Stack
 
