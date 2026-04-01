@@ -547,6 +547,12 @@
         Rectangle:
             pos: self.pos
             size: self.size
+        # Color bar for the day of the week
+        Color:
+            rgba: root.day_color
+        Rectangle:
+            pos: self.x, self.y
+            size: 6, self.height
         Color:
             rgba: 0.7, 0.7, 0.7, 1
         Line:
@@ -554,6 +560,7 @@
     BoxLayout:
         orientation: "horizontal"
         size_hint_x: 1
+        padding: "12dp", 0, 0, 0
         MDLabel:
             text: root.client_nom
             size_hint_x: 0.3
@@ -777,6 +784,12 @@
                     text_color: 0.1, 0.8, 0.1, 1
                     font_style: "Caption"
                     bold: True
+            
+            MDIconButton:
+                icon: "file-pdf-box"
+                theme_text_color: "Custom"
+                text_color: 1, 1, 1, 1
+                on_release: root.generate_pdf_report()
         GridLayout:
             cols: 2
             size_hint_y: None
@@ -866,9 +879,9 @@
                     bold: True
                 MDLabel:
                     id: total_history_label
-                    text: "Total: " + root.total_filtered_amount
+                    text: f"Total: {root.total_filtered_amount}  |  Payés: {root.paid_count}  |  Non-payés: {root.unpaid_count}"
                     theme_text_color: "Custom"
-                    text_color: 0.1, 0.8, 0.1, 1
+                    text_color: 0.4, 0.9, 0.4, 1
                     font_style: "Caption"
                     bold: True
             
@@ -943,6 +956,45 @@
                 text: "Actualiser"
                 size_hint_x: 0.25
                 on_release: root.refresh_history()
+            MDRaisedButton:
+                text: "Vider"
+                size_hint_x: 0.25
+                md_bg_color: 0.9, 0.3, 0.3, 1
+                on_release: root.show_clear_confirmation()
             Widget:
-                size_hint_x: 0.5
+                size_hint_x: 0.25
 </root>
+
+<FolderChooserPopup>:
+    size_hint: 0.9, 0.9
+    auto_dismiss: False
+    BoxLayout:
+        orientation: "vertical"
+        padding: "16dp"
+        spacing: "16dp"
+        MDLabel:
+            text: "Choisir un dossier d'enregistrement"
+            size_hint_y: None
+            height: "40dp"
+            font_style: "H6"
+            halign: "center"
+            bold: True
+        
+        FileChooserIconView:
+            id: filechooser
+            dirselect: True
+            path: root.initial_path
+            filters: []
+            
+        BoxLayout:
+            size_hint_y: None
+            height: "64dp"
+            padding: "8dp"
+            spacing: "16dp"
+            Widget:
+            MDRaisedButton:
+                text: "Annuler"
+                on_release: root.dismiss()
+            MDRaisedButton:
+                text: "Sélectionner ce dossier"
+                on_release: root.select_folder(filechooser.path)
