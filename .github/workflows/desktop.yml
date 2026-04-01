@@ -65,8 +65,9 @@ jobs:
             --hidden-import "kivymd" \
             --hidden-import "kivy" \
             --hidden-import "fpdf" \
-            --collect-all "kivy" \
             --collect-all "kivymd" \
+            --exclude-module "tests" \
+            --exclude-module "test" \
             main.py
 
       - name: Package as tar.gz
@@ -111,6 +112,8 @@ jobs:
 
       - name: Build with PyInstaller (Windows)
         run: |
+          $env:KIVY_GL_BACKEND = "angle_sdl2"
+          $env:KIVY_NO_CONSOLELOG = "1"
           pyinstaller `
             --name "e-jiro" `
             --onefile `
@@ -120,8 +123,10 @@ jobs:
             --hidden-import "kivymd" `
             --hidden-import "kivy" `
             --hidden-import "fpdf" `
-            --collect-all "kivy" `
             --collect-all "kivymd" `
+            --exclude-module "tests" `
+            --exclude-module "test" `
+            --runtime-hook "win_runtimehook.py" `
             main.py
 
       - name: Upload Windows artifact

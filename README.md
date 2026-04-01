@@ -12,7 +12,7 @@ A Kivy/KivyMD desktop/mobile application for managing solar/rechargeable lamp lo
   - Track daily payments per client
   - View payment history with filtering (today, this week, this month)
   - Toggle payment status per loan
-  - **PDF Export**: Generate payment list reports (e.g., `listpaiment_2026-04-01.pdf`)
+  - **PDF Export**: Generate payment list reports
 - **Settings**: Configure business name, default rate, currency
 
 ## Tech Stack
@@ -68,11 +68,11 @@ transactions: id, pret_id, date_paiement, montant, type ('journalier')
 settings: key, value (business_name, default_rate, currency)
 ```
 
-## Project Structure
+## Project Structure (Current - To Refactor)
 
 ```
 .
-├── main.py           # App entry point, ScreenManager, screens
+├── main.py           # App entry point, ScreenManager, all screens - NEEDS SPLITTING
 ├── database.py       # DatabaseManager class (CRUD operations)
 ├── style.kv         # Custom widget styles and screen layouts
 ├── pdf_generator.py  # PDF report generation
@@ -80,6 +80,14 @@ settings: key, value (business_name, default_rate, currency)
 │   └── test_database.py  # Database layer tests
 └── venv/            # Virtual environment
 ```
+
+## Refactoring Plan
+
+See [AGENTS.md](AGENTS.md) for detailed refactoring guidelines including:
+- Target folder structure
+- Critical rules to avoid crashes
+- Import order requirements
+- Common error fixes
 
 ## Payment Rules
 
@@ -91,7 +99,7 @@ settings: key, value (business_name, default_rate, currency)
 ## PDF Export
 
 - Generated from payment screen
-- Saved in project root as `listpaiment_YYYY-MM-DD.pdf`
+- Saved in Downloads folder as `listpaiment_YYYY-MM-DD.pdf`
 - Contains: Client name, phone, lamp number, amount
 
 ## Currency

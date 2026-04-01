@@ -1,4 +1,4 @@
-from pdf_generator import generate_payment_report
+from app.pdf_generator import generate_payment_report
 import os
 
 def test_pdf_generation():
