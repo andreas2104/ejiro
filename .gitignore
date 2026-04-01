@@ -4,5 +4,21 @@ __pycache__/
 *.db
 .env
 *.egg-info/
+
+# Build outputs
 dist/
 build/
+bin/
+.buildozer/
+*.apk
+*.aab
+*.tar.gz
+*.spec
+!buildozer.spec
+
+# Generated PDFs (runtime output)
+listpaiment_*.pdf
+
+# IDE
+.idea/
+.vscode/

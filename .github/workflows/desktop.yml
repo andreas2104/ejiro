@@ -1,0 +1,138 @@
+name: Build Desktop App
+
+on:
+  push:
+    branches: [ main, master ]
+    tags:
+      - 'v*'
+  pull_request:
+    branches: [ main, master ]
+  workflow_dispatch:
+
+jobs:
+  test:
+    name: Run Tests (pre-build)
+    uses: ./.github/workflows/test.yml
+
+  build-linux:
+    name: Build Linux Desktop
+    needs: test
+    runs-on: ubuntu-22.04
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install system dependencies
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libgl1-mesa-glx \
+            libgles2-mesa \
+            libsdl2-dev \
+            libsdl2-image-dev \
+            libsdl2-mixer-dev \
+            libsdl2-ttf-dev \
+            libportmidi-dev \
+            libswscale-dev \
+            libavformat-dev \
+            libavcodec-dev \
+            libfreetype6-dev \
+            patchelf \
+            fuse \
+            libfuse2
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller==6.5.0
+
+      - name: Build with PyInstaller (Linux)
+        run: |
+          pyinstaller \
+            --name "e-jiro" \
+            --onefile \
+            --windowed \
+            --add-data "style.kv:." \
+            --add-data "logo_e-jiro.png:." \
+            --hidden-import "kivymd" \
+            --hidden-import "kivy" \
+            --hidden-import "fpdf" \
+            --collect-all "kivy" \
+            --collect-all "kivymd" \
+            main.py
+
+      - name: Package as tar.gz
+        run: |
+          cd dist
+          tar -czf e-jiro-linux-amd64.tar.gz e-jiro
+          mv e-jiro-linux-amd64.tar.gz ..
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ejiro-linux-${{ github.run_number }}
+          path: e-jiro-linux-amd64.tar.gz
+          retention-days: 30
+
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: e-jiro-linux-amd64.tar.gz
+
+  build-windows:
+    name: Build Windows Desktop
+    needs: test
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install Python dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller==6.5.0
+
+      - name: Build with PyInstaller (Windows)
+        run: |
+          pyinstaller `
+            --name "e-jiro" `
+            --onefile `
+            --windowed `
+            --add-data "style.kv;." `
+            --add-data "logo_e-jiro.png;." `
+            --hidden-import "kivymd" `
+            --hidden-import "kivy" `
+            --hidden-import "fpdf" `
+            --collect-all "kivy" `
+            --collect-all "kivymd" `
+            main.py
+
+      - name: Upload Windows artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ejiro-windows-${{ github.run_number }}
+          path: dist\e-jiro.exe
+          retention-days: 30
+
+      - name: Attach to GitHub Release
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist\e-jiro.exe
