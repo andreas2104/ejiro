@@ -1,5 +1,5 @@
 import logging
-from datetime import datetime
+from datetime import datetime, date
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.lang import Builder
@@ -40,6 +40,24 @@ class RootWidget(BoxLayout):
             drawer.set_state("close")
         else:
             drawer.set_state("open")
+
+    def refresh_history(self):
+        logger.info("refresh_history called")
+        history_screen = self.ids.screen_manager.get_screen("history")
+        if hasattr(history_screen, "refresh_history"):
+            logger.info("Calling history refresh_history")
+            Clock.schedule_once(lambda dt: history_screen.refresh_history())
+        else:
+            logger.warning("history screen has no refresh_history")
+
+    def force_refresh_history(self):
+        logger.info("force_refresh_history called")
+        try:
+            history_screen = self.ids.screen_manager.get_screen("history")
+            history_screen.refresh_history()
+            logger.info("History refreshed successfully")
+        except Exception as e:
+            logger.error(f"Error force refreshing history: {e}")
 
 
 def get_sp(size_name: str) -> int:
@@ -117,6 +135,21 @@ class StatCard(MDCard, ButtonBehavior):
     title = StringProperty()
     value = StringProperty()
     icon = StringProperty()
+
+
+class DailyPaymentListItem(BoxLayout):
+    client_nom = StringProperty()
+    lampe_numero = StringProperty()
+    montant_journalier = StringProperty()
+    is_paid = BooleanProperty(False)
+    loan_id = None
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.register_event_type("on_checkbox_active")
+
+    def on_checkbox_active(self, *args):
+        pass
 
 
 class LampFormModal(Popup):
@@ -236,7 +269,9 @@ class DashboardScreen(MDScreen):
     def update_stats(self):
         db = get_database()
         daily = db.get_daily_revenue()
+        daily = db.get_daily_revenue()
         total = db.get_total_revenue()
+        weekly = db.get_weekly_revenue()
         client_count = db.get_clients_count()
         lamp_count = db.get_lamps_count()
         loan_count = db.get_active_loans_count()
@@ -246,6 +281,12 @@ class DashboardScreen(MDScreen):
         self.loan_count = str(loan_count)
         self.daily_revenue = f"{daily:.0f} Ar"
         self.total_revenue = f"{total:.0f} Ar"
+
+        # Update labels if they exist (for backward compatibility with old layout)
+        if hasattr(self.ids, "daily_label"):
+            self.ids.daily_label.text = f"Journalier: {daily:.2f} AR"
+        if hasattr(self.ids, "weekly_label"):
+            self.ids.weekly_label.text = f"Hebdomadaire: {weekly:.2f} AR"
 
 
 class ClientFormModal(Popup):
@@ -700,7 +741,6 @@ class LoanScreen(MDScreen):
         if montant_journalier <= 0:
             logger.warning("Le montant doit être positif")
             return
-
         db = get_database()
         clients = db.get_all_clients()
         client = next((c for c in clients if c["nom"] == client_nom), None)
@@ -817,6 +857,14 @@ class PaymentScreen(MDScreen):
         if hasattr(self.ids, "date_label"):
             self.ids.date_label.text = f"Date: {value}"
         Clock.schedule_once(lambda dt: self.refresh_clients())
+
+    def refresh_daily_payments(self):
+        # Redirect to refresh_clients for consistency
+        self.refresh_clients()
+
+    def update_totals(self):
+        # Already handled by refresh_total elsewhere or partially here
+        self.refresh_total()
 
     def show_date_picker(self):
         date_dialog = MDDatePicker()
@@ -943,10 +991,28 @@ class HistoryScreen(MDScreen):
             self.ids.history_list.add_widget(item)
             total_sum += t["montant"]
 
-        self.total_filtered_amount = f"{total_sum:.0f} Ar"
+    def update_totals(self):
+        db = get_database()
+        daily = db.get_daily_revenue()
+        weekly = db.get_weekly_revenue()
+        monthly = db.get_monthly_revenue()
+        
+        if hasattr(self.ids, "daily_label"):
+            self.ids.daily_label.text = f"Aujourd'hui: {daily:.0f} Ar"
+        if hasattr(self.ids, "weekly_label"):
+            self.ids.weekly_label.text = f"Semaine: {weekly:.0f} Ar"
+        if hasattr(self.ids, "monthly_label"):
+            self.ids.monthly_label.text = f"Mois: {monthly:.0f} Ar"
+        
+        if hasattr(self.ids, "current_date_label"):
+            self.ids.current_date_label.text = (
+                f"Historique - {date.today().strftime('%d/%m/%Y')}"
+            )
 
-
-
+    def filter_transactions(self, query=None):
+        # We can implement specific filtering logic here if needed
+        # For now, refresh_history handles the date filter
+        self.refresh_history()
 
 
 class LampManagerApp(MDApp):

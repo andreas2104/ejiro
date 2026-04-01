@@ -41,6 +41,7 @@ class DatabaseManager:
                     lampe_id INTEGER NOT NULL,
                     montant_journalier REAL NOT NULL,
                     date_debut TEXT NOT NULL,
+                    montant_journalier REAL NOT NULL,
                     statut TEXT CHECK(statut IN ('actif', 'terminé')) DEFAULT 'actif',
                     FOREIGN KEY (client_id) REFERENCES clients(id),
                     FOREIGN KEY (lampe_id) REFERENCES lamps(id)
@@ -339,18 +340,54 @@ class DatabaseManager:
                 for r in rows
             ]
 
+    def is_paid_today(self, pret_id: int) -> bool:
+        today = datetime.now().date().isoformat()
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT COUNT(*) FROM transactions WHERE pret_id = ? AND date_paiement LIKE ?",
+                (pret_id, f"{today}%"),
+            )
+            return cursor.fetchone()[0] > 0
+
+    def is_paid_for_date(self, pret_id: int, date_str: str) -> bool:
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT COUNT(*) FROM transactions WHERE pret_id = ? AND date_paiement LIKE ?",
+                (pret_id, f"{date_str}%"),
+            )
+            return cursor.fetchone()[0] > 0
+
+    def get_revenue_for_date(self, date_str: str) -> float:
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT SUM(montant) FROM transactions WHERE date_paiement LIKE ?",
+                (f"{date_str}%",),
+            )
+            result = cursor.fetchone()[0]
+            return result if result else 0.0
+
     def record_payment(
-        self, pret_id: int, montant: float, type: str = "journalier"
+        self,
+        pret_id: int,
+        montant: float,
+        type: str = "journalier",
+        date_paiement: str = None,
     ) -> int:
         if montant <= 0:
             raise ValueError("Payment amount must be positive")
 
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
+            payment_date = (
+                date_paiement if date_paiement else datetime.now().isoformat()
+            )
             cursor.execute(
                 "INSERT INTO transactions (pret_id, date_paiement, montant, type) "
                 "VALUES (?, ?, ?, ?)",
-                (pret_id, datetime.now().isoformat(), montant, type),
+                (pret_id, payment_date, montant, type),
             )
             conn.commit()
             logger.info(f"Payment recorded: {montant} for loan {pret_id}")
@@ -402,6 +439,19 @@ class DatabaseManager:
         with sqlite3.connect(self.db_path) as conn:
             cursor = conn.cursor()
             cursor.execute("SELECT SUM(montant) FROM transactions")
+            result = cursor.fetchone()[0]
+            return result if result else 0.0
+
+    def get_monthly_revenue(self) -> float:
+        today = datetime.now().date()
+        first_day_of_month = today.replace(day=1).isoformat()
+        with sqlite3.connect(self.db_path) as conn:
+            cursor = conn.cursor()
+            cursor.execute(
+                "SELECT SUM(montant) FROM transactions "
+                "WHERE date_paiement >= ? AND date_paiement <= ?",
+                (first_day_of_month, f"{today.isoformat()}T23:59:59"),
+            )
             result = cursor.fetchone()[0]
             return result if result else 0.0
 

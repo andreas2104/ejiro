@@ -227,7 +227,6 @@
                 icon: "history"
                 value: "Journal"
                 on_release: app.root.ids.screen_manager.current = "history"
-
         Widget:
 
 <ClientsScreen>:
@@ -556,10 +555,55 @@
             halign: "center"
             font_size: "14sp"
         MDLabel:
-            text: root.montant
+            text: root.montant + " AR"
             size_hint_x: 0.2
             halign: "center"
             font_size: "14sp"
+
+<DailyPaymentListItem>:
+    size_hint_y: None
+    height: "50dp"
+    padding: "8dp"
+    canvas.before:
+        Color:
+            rgba: 0.9, 0.9, 0.9, 1
+        Rectangle:
+            pos: self.pos
+            size: self.size
+        Color:
+            rgba: 0.7, 0.7, 0.7, 1
+        Line:
+            points: self.x, self.y, self.x + self.width, self.y
+    BoxLayout:
+        orientation: "horizontal"
+        size_hint_x: 1
+        MDLabel:
+            text: root.client_nom
+            size_hint_x: 0.35
+            halign: "center"
+            font_size: "14sp"
+            shorten: True
+            shorten_from: "right"
+        MDLabel:
+            text: root.lampe_numero
+            size_hint_x: 0.25
+            halign: "center"
+            font_size: "14sp"
+        MDLabel:
+            text: root.montant_journalier + " AR"
+            size_hint_x: 0.2
+            halign: "center"
+            font_size: "14sp"
+        CheckBox:
+            id: paid_checkbox
+            size_hint_x: 0.2
+            active: root.is_paid
+            on_active: root.dispatch("on_checkbox_active", self.active)
+            canvas.before:
+                Color:
+                    rgba: 0.3, 0.3, 0.3, 1
+                Line:
+                    rectangle: self.x, self.y, self.width, self.height
 
 <LoanScreen>:
     name: "loan"
@@ -711,7 +755,6 @@
                     text_color: 0.1, 0.8, 0.1, 1
                     font_style: "Caption"
                     bold: True
-
         GridLayout:
             cols: 2
             size_hint_y: None
@@ -856,7 +899,6 @@
                 height: self.minimum_height
                 spacing: 0
                 padding: 0
-        
         BoxLayout:
             orientation: "horizontal"
             size_hint_y: None
@@ -872,5 +914,4 @@
                 on_release: root.refresh_history()
             Widget:
                 size_hint_x: 0.5
-
-
+</root>
