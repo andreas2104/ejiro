@@ -6,7 +6,7 @@ from typing import Optional, List, Dict, Any
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-DB_PATH = "lampmanager.db"
+DB_PATH = "e-jiro.db"
 
 
 class DatabaseManager:

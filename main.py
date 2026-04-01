@@ -1015,7 +1015,7 @@ class HistoryScreen(MDScreen):
         self.refresh_history()
 
 
-class LampManagerApp(MDApp):
+class EJiroApp(MDApp):
     business_name = StringProperty("e-Jiro")
 
     def __init__(self, **kwargs):
@@ -1029,4 +1029,4 @@ class LampManagerApp(MDApp):
 
 
 if __name__ == "__main__":
-    LampManagerApp().run()
+    EJiroApp().run()

@@ -6,11 +6,12 @@
         MDIconButton:
             icon: "menu"
             on_press: app.root.toggle_nav_drawer()
-        MDLabel:
-            text: app.business_name
-            halign: "left"
-            font_style: "H5"
-            text_color: 1, 1, 1, 1
+        Image:
+            source: "logo_e-jiro.png"
+            size_hint: None, None
+            size: "100dp", "40dp"
+            fit_mode: "contain"
+            pos_hint: {"center_y": .5}
     MDNavigationLayout:
         ScreenManager:
             id: screen_manager
@@ -27,11 +28,11 @@
                 orientation: "vertical"
                 padding: "16dp"
                 spacing: "16dp"
-                MDLabel:
-                    text: "Menu"
-                    font_style: "H5"
+                Image:
+                    source: "logo_e-jiro.png"
                     size_hint_y: None
-                    height: "40dp"
+                    height: "120dp"
+                    fit_mode: "contain"
                 MDFlatButton:
                     text: "Tableau de Bord"
                     size_hint_x: 1
@@ -146,6 +147,12 @@
     md_bg_color: 0.95, 0.95, 0.95, 1
     radius: [12, 12, 12, 12]
     ripple_behavior: True
+    canvas.after:
+        Color:
+            rgba: 0.7, 0.7, 0.7, 1
+        Line:
+            width: 1.1
+            rounded_rectangle: (self.x, self.y, self.width, self.height, 12, 12, 12, 12, 100)
     
     MDIcon:
         icon: root.icon
@@ -285,6 +292,11 @@
                 height: self.minimum_height
                 spacing: 0
                 padding: 0
+        
+        Widget:
+            size_hint_y: None
+            height: "15dp"
+
         BoxLayout:
             orientation: "horizontal"
             spacing: "12dp"
@@ -359,6 +371,11 @@
                 height: self.minimum_height
                 spacing: 0
                 padding: 0
+        
+        Widget:
+            size_hint_y: None
+            height: "15dp"
+
         BoxLayout:
             orientation: "horizontal"
             spacing: "12dp"
@@ -690,6 +707,11 @@
                     size_hint_x: 0.25
                     font_size: "14sp"
                     on_press: root.assign_lampe(client_spinner.text, lampe_spinner.text, montant_input.text)
+        
+        Widget:
+            size_hint_y: None
+            height: "15dp"
+
         BoxLayout:
             orientation: "horizontal"
             size_hint_y: None
@@ -787,6 +809,10 @@
                 spacing: 0
                 padding: 0
         
+        Widget:
+            size_hint_y: None
+            height: "15dp"
+
         BoxLayout:
             orientation: "horizontal"
             size_hint_y: None
@@ -899,6 +925,11 @@
                 height: self.minimum_height
                 spacing: 0
                 padding: 0
+        
+        Widget:
+            size_hint_y: None
+            height: "15dp"
+
         BoxLayout:
             orientation: "horizontal"
             size_hint_y: None
