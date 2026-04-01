@@ -10,7 +10,7 @@ from kivy.lang import Builder
 from kivy.properties import StringProperty
 from kivymd.app import MDApp
 
-from database import DatabaseManager
+from app.database import DatabaseManager
 
 logger = logging.getLogger(__name__)
 

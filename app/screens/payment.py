@@ -17,7 +17,7 @@ from kivymd.uix.screen import MDScreen
 
 from app.utils import get_database
 from app.widgets.payment_items import ClientPaymentItem
-from pdf_generator import generate_payment_report
+from app.pdf_generator import generate_payment_report
 
 logger = logging.getLogger(__name__)
 

@@ -13,7 +13,7 @@ def test_db():
 
 @pytest.fixture
 def db_manager(test_db):
-    from database import DatabaseManager
+    from app.database import DatabaseManager
 
     db = DatabaseManager(test_db)
     yield db

@@ -6,7 +6,7 @@ import logging
 from kivy.app import App
 from kivy.metrics import sp
 
-from database import DatabaseManager
+from app.database import DatabaseManager
 
 logger = logging.getLogger(__name__)
 

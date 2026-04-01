@@ -161,9 +161,8 @@ When importing DatabaseManager, use consistent path:
 
 ```python
 # From any screen file:
-from database import get_database
+from app.database import get_database
 
-# NOT: from app.database import get_database
 # NOT: import database
 ```
 
