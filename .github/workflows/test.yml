@@ -57,12 +57,12 @@ jobs:
           # Start virtual display for Kivy
           Xvfb :99 -screen 0 1280x720x24 &
           sleep 2
-          python -m pytest tests/ -v --tb=short
+          python -m pytest tests/ -v --tb=short --cache-clear
 
       - name: Upload test results
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: test-results-${{ matrix.python-version }}
-          path: .pytest_cache/
+          path: tests/
           retention-days: 7
