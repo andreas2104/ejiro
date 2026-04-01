@@ -112,6 +112,9 @@ jobs:
 
       - name: Build with PyInstaller (Windows)
         run: |
+          $env:KIVY_GL_BACKEND = "angle_sdl2"
+          $env:KIVY_NO_CONSOLELOG = "1"
+          $env:SDL_VIDEODRIVER = "dummy"
           pyinstaller `
             --name "e-jiro" `
             --onefile `
@@ -124,6 +127,7 @@ jobs:
             --collect-all "kivymd" `
             --exclude-module "tests" `
             --exclude-module "test" `
+            --runtime-hook "win_runtimehook.py" `
             main.py
 
       - name: Upload Windows artifact
