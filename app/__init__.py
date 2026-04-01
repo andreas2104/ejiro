@@ -22,10 +22,18 @@ class EJiroApp(MDApp):
 
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
-        # Use a writable directory for the database (especially on Android)
+        self.database = None  # Placeholder until on_start
+
+    def on_start(self):
+        """Initialize database after app is fully up (needed for user_data_dir)."""
         db_path = os.path.join(self.user_data_dir, "e-jiro.db")
+        # Ensure the directory exists
+        if not os.path.exists(self.user_data_dir):
+            os.makedirs(self.user_data_dir, exist_ok=True)
+            
         self.database = DatabaseManager(db_path=db_path)
         self.business_name = self.database.get_setting("business_name", "e-Jiro")
+        logger.info(f"Database initialized at {db_path}")
 
     def build(self):
         # ── Register all custom classes with Kivy BEFORE loading the KV ──────

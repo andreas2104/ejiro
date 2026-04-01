@@ -24,7 +24,7 @@ version = 1.0.0
 
 # (list) Application requirements
 # comma separated e.g. requirements = sqlite3,kivy
-requirements = python3==3.11.5,kivy==2.3.0,kivymd==1.2.0,fpdf2,pillow,android,pyjnius,sdl2
+requirements = python3==3.11.5,kivy==2.3.0,kivymd==1.2.0,fpdf2,pillow,android,pyjnius,sdl2,sqlite3,freetype
 
 # (str) Application icon
 icon.filename = %(source.dir)s/logo_e-jiro.png
@@ -36,7 +36,7 @@ orientation = portrait
 fullscreen = 0
 
 # (list) Permissions
-android.permissions = INTERNET, WRITE_EXTERNAL_STORAGE, READ_EXTERNAL_STORAGE
+android.permissions = INTERNET, WRITE_EXTERNAL_STORAGE, READ_EXTERNAL_STORAGE, VIBRATE
 
 # (int) Target Android API, should be as high as possible.
 android.api = 33
@@ -66,6 +66,9 @@ android.accept_sdk_license = True
 
 # (str) Android logcat filters to use
 android.logcat_filters = *:S python:D
+
+# (str) Log level for Kivy (0=error, 1=info, 2=debug)
+log_level = 2
 
 # (bool) Android allow backup feature (disabled by default)
 android.allow_backup = True
