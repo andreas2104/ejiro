@@ -41,6 +41,7 @@ class DatabaseManager:
                     lampe_id INTEGER NOT NULL,
                     montant_journalier REAL NOT NULL,
                     date_debut TEXT NOT NULL,
+                    date_fin TEXT,
                     statut TEXT CHECK(statut IN ('actif', 'terminé')) DEFAULT 'actif',
                     FOREIGN KEY (client_id) REFERENCES clients(id),
                     FOREIGN KEY (lampe_id) REFERENCES lamps(id)
@@ -70,6 +71,13 @@ class DatabaseManager:
             ]
             for key, val in defaults:
                 cursor.execute("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)", (key, val))
+
+            # Migration: Ensure date_fin exists in prets table
+            cursor.execute("PRAGMA table_info(prets)")
+            columns = [column[1] for column in cursor.fetchall()]
+            if columns and "date_fin" not in columns:
+                cursor.execute("ALTER TABLE prets ADD COLUMN date_fin TEXT")
+                logger.info("Migration: Added date_fin column to prets table")
 
             conn.commit()
             logger.info("Database tables initialized")
